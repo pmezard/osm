@@ -295,6 +295,9 @@ type Node struct {
 
 func parseMeta(r *baseReader, prev *Metadata) {
 	versionDelta := r.ReadUnsigned()
+	// TODO: test behaviour when interleaving entries with and without version
+	// information. In particular, what are the previous values used as based
+	// for delta encoded fields.
 	if versionDelta > 0 {
 		prev.Version = int(versionDelta)
 		prev.Timestamp += int(r.ReadSigned())
@@ -331,6 +334,7 @@ func parseNode(r *baseReader, length int, prev *Node) error {
 	prev.Id += r.ReadSigned()
 	prev.Tags = prev.Tags[:0]
 	parseMeta(r, &prev.Meta)
+	// TODO: implement 32-bit overflow behaviour (see o5m spec on wiki)
 	prev.Lon += r.ReadSigned()
 	prev.Lat += r.ReadSigned()
 	remaining := length - (r.Offset() - offset)
