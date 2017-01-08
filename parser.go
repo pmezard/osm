@@ -441,6 +441,10 @@ func parseRelation(r *baseReader, length int, prev *Relation, refIds []int64) er
 	return r.Err()
 }
 
+type ResetPoint struct {
+	offset int
+}
+
 const (
 	BBoxKind     int = 0xdb
 	NodeKind     int = 0x10
@@ -456,7 +460,7 @@ type O5MReader struct {
 	err  error
 	kind int
 
-	offset      int
+	resetPoint  ResetPoint
 	boundingBox *BoundingBox
 	node        Node
 	way         Way
@@ -497,21 +501,21 @@ func (r *O5MReader) reset() {
 
 func (r *O5MReader) Next() bool {
 	for {
-		r.offset = r.r.Offset()
 		k := r.r.ReadByte()
 		if r.r.Err() != nil {
 			r.err = fmt.Errorf("cannot read dataset header: %s", r.r.Err())
 			return false
 		}
 		kind := int(k)
+		r.kind = kind
 		if kind == ResetKind {
 			r.reset()
-			continue
+			r.resetPoint.offset = r.r.Offset() - 1
+			return true
 		}
 		if kind == EndKind {
 			return false
 		}
-		r.kind = int(kind)
 		l := r.r.ReadUnsigned()
 		if r.r.Err() != nil {
 			r.err = r.r.Err()
@@ -560,12 +564,30 @@ func (r *O5MReader) Next() bool {
 	}
 }
 
+func (r *O5MReader) Seek(target ResetPoint) error {
+	_, err := r.fp.Seek(int64(target.offset), 0)
+	if err != nil {
+		return err
+	}
+	r.r = NewBaseReader(r.fp)
+	r.r.read = target.offset
+	r.reset()
+	return nil
+}
+
 func (r *O5MReader) Err() error {
 	return r.err
 }
 
 func (r *O5MReader) Kind() int {
 	return r.kind
+}
+
+func (r *O5MReader) ResetPoint() ResetPoint {
+	if r.kind != ResetKind {
+		panic("not a reset point")
+	}
+	return r.resetPoint
 }
 
 func (r *O5MReader) BoundingBox() BoundingBox {
