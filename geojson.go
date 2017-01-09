@@ -9,8 +9,8 @@ import (
 )
 
 type Point struct {
-	Lon int64
-	Lat int64
+	Lon int64 `json:"lon"`
+	Lat int64 `json:"lat"`
 }
 
 type NodePoint struct {
@@ -92,9 +92,9 @@ func buildNodeArray(r *O5MReader) (NodePoints, error) {
 }
 
 type Linestring struct {
-	Id     int64
-	Role   string
-	Points []Point
+	Id     int64   `json:"id"`
+	Role   string  `json:"role"`
+	Points []Point `json:"points"`
 }
 
 func buildWay(way *Way, nodes NodePoints) (*Linestring, error) {
@@ -448,48 +448,27 @@ func collectWayRefs(rel *Relation) ([]Ref, error) {
 	return wayIds, nil
 }
 
-func collectWayGeometries(r *O5MReader, wayOffset ResetPoint, wayIds []Ref,
-	nodes NodePoints) ([]*Linestring, error) {
-
+func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
 	// Resolve ways in a single scan
 	rings := []*Linestring{}
 	if len(wayIds) <= 0 {
 		return rings, nil
 	}
-	err := r.Seek(wayOffset)
-	if err != nil {
-		return nil, err
-	}
-	for r.Next() {
-		if r.Kind() != WayKind {
-			continue
-		}
-		w := r.Way()
-		if w.Id != wayIds[len(rings)].Id {
-			continue
-		}
-		ring, err := buildWay(w, nodes)
+	for _, ref := range wayIds {
+		ring, err := db.Get(ref.Id)
 		if err != nil {
 			return nil, err
 		}
-		ring.Role = wayIds[len(rings)].Role
-		rings = append(rings, ring)
-		if len(rings) == len(wayIds) {
-			break
+		if ring == nil {
+			continue
 		}
-	}
-	if r.Err() != nil {
-		return nil, r.Err()
-	}
-	if len(rings) != len(wayIds) {
-		return nil, fmt.Errorf("cannot collect way: %d", wayIds[len(rings)].Id)
+		ring.Role = ref.Role
+		rings = append(rings, ring)
 	}
 	return rings, nil
 }
 
-func buildRelation(rel *Relation, r *O5MReader, wayOffset, relOffset ResetPoint,
-	nodes NodePoints) (*RelationJson, error) {
-
+func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	if isMultiPolygon(rel) {
 		return nil, fmt.Errorf("cannot handle multipolygons: %d", rel.Id)
 	}
@@ -498,7 +477,7 @@ func buildRelation(rel *Relation, r *O5MReader, wayOffset, relOffset ResetPoint,
 	if err != nil {
 		return nil, err
 	}
-	rings, err := collectWayGeometries(r, wayOffset, wayIds, nodes)
+	rings, err := collectWayGeometries(wayIds, db)
 	if err != nil {
 		return nil, err
 	}
@@ -507,4 +486,27 @@ func buildRelation(rel *Relation, r *O5MReader, wayOffset, relOffset ResetPoint,
 		return nil, err
 	}
 	return makeJsonRelation(rel, g)
+}
+
+func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
+	i := 0
+	for r.Next() {
+		if r.Kind() != WayKind {
+			continue
+		}
+		w := r.Way()
+		ring, err := buildWay(w, nodes)
+		if err != nil {
+			return err
+		}
+		err = db.Put(ring)
+		if err != nil {
+			return err
+		}
+		i++
+		if (i % 100) == 0 {
+			fmt.Println("indexed", i)
+		}
+	}
+	return r.Err()
 }

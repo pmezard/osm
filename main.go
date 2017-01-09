@@ -51,6 +51,7 @@ func countFn() error {
 var (
 	geojsonCmd  = app.Command("geojson", "convert o5m to geojson")
 	geojsonPath = geojsonCmd.Arg("path", "o5m file path").Required().String()
+	geojsonDb   = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
 )
 
 type ESDoc struct {
@@ -64,46 +65,71 @@ func geojsonFn() error {
 	if err != nil {
 		return err
 	}
-	nodes, err := buildNodeArray(r)
+	db, err := OpenWaysDb(*geojsonDb)
 	if err != nil {
 		return err
 	}
-	wayReader, err := NewO5MReader(*geojsonPath)
-	if err != nil {
-		return err
-	}
-	resets := []ResetPoint{}
+	seen := 0
+	converted := 0
 	for r.Next() {
-		if r.Kind() == ResetKind {
-			resets = append(resets, r.ResetPoint())
-		} else if r.Kind() == RelationKind {
-			if len(resets) != 2 {
-				return fmt.Errorf("not enough reset points")
-			}
-			rel := r.Relation()
-			js, err := buildRelation(rel, wayReader, resets[0], resets[1], nodes)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR %d %s\n", rel.Id, err)
-			}
-			if js == nil {
-				continue
-			}
-			doc := ESDoc{
-				Id:     js.Id,
-				Type:   "relation",
-				Source: js,
-			}
-			data, err := json.Marshal(&doc)
-			if err != nil {
-				return err
-			}
-			fmt.Println(string(data))
+		if r.Kind() != RelationKind {
+			continue
 		}
+		seen++
+		rel := r.Relation()
+		js, err := buildRelation(rel, db)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR %d %s\n", rel.Id, err)
+		}
+		if js == nil {
+			continue
+		}
+		doc := ESDoc{
+			Id:     js.Id,
+			Type:   "relation",
+			Source: js,
+		}
+		data, err := json.Marshal(&doc)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+		converted++
 	}
 	if r.Err() != nil {
 		return r.Err()
 	}
+	fmt.Fprintf(os.Stderr, "written: %d/%d\n", converted, seen)
 	return nil
+}
+
+var (
+	indexWaysCmd = app.Command("indexways", "index ways in k/v store")
+	indexWaysO5m = indexWaysCmd.Arg("o5mPath", "o5m file path").Required().String()
+	indexWaysDb  = indexWaysCmd.Arg("dbPath", "output DB path").Required().String()
+)
+
+func indexWaysFn() error {
+	r, err := NewO5MReader(*indexWaysO5m)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(*indexWaysDb); err == nil {
+		err = os.Remove(*indexWaysDb)
+		if err != nil {
+			return err
+		}
+	}
+	db, err := OpenWaysDb(*indexWaysDb)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	nodes, err := buildNodeArray(r)
+	if err != nil {
+		return err
+	}
+	return indexWays(r, nodes, db)
 }
 
 func dispatch() error {
@@ -113,6 +139,8 @@ func dispatch() error {
 		return countFn()
 	case geojsonCmd.FullCommand():
 		return geojsonFn()
+	case indexWaysCmd.FullCommand():
+		return indexWaysFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
