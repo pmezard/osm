@@ -250,7 +250,7 @@ func buildGeometry(rings []*Linestring) (*geos.Geometry, error) {
 	for _, ring := range rings {
 		if ring.Role == "inner" {
 			inner = append(inner, ring)
-		} else if ring.Role == "outer" {
+		} else if ring.Role == "outer" || ring.Role == "" {
 			outer = append(outer, ring)
 		} else {
 			return nil, fmt.Errorf("unsupported ring role: %s", ring.Role)
