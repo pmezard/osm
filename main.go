@@ -86,7 +86,7 @@ func geojsonFn() error {
 		}
 		doc := ESDoc{
 			Id:     js.Id,
-			Type:   "relation",
+			Type:   "boundary",
 			Source: js,
 		}
 		data, err := json.Marshal(&doc)

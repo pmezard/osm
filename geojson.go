@@ -378,7 +378,7 @@ func geosToJson(g *geos.Geometry) ([]*Location, error) {
 type RelationJson struct {
 	Id       string       `json:"id"`
 	Name     string       `json:"name"`
-	Location Location     `json:"loc"`
+	Location Location     `json:"shape"`
 	Tags     []StringPair `json:"tags"`
 }
 
