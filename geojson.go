@@ -376,9 +376,10 @@ func geosToJson(g *geos.Geometry) ([]*Location, error) {
 }
 
 type RelationJson struct {
-	Id       string   `json:"id"`
-	Name     string   `json:"name"`
-	Location Location `json:"loc"`
+	Id       string       `json:"id"`
+	Name     string       `json:"name"`
+	Location Location     `json:"loc"`
+	Tags     []StringPair `json:"tags"`
 }
 
 func makeJsonRelation(rel *Relation, g *geos.Geometry) (*RelationJson, error) {
@@ -400,6 +401,7 @@ func makeJsonRelation(rel *Relation, g *geos.Geometry) (*RelationJson, error) {
 		if tag.Key == "name" {
 			r.Name = tag.Value
 		}
+		r.Tags = append(r.Tags, tag)
 	}
 	return r, nil
 }

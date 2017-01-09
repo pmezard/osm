@@ -267,8 +267,8 @@ func parseBoundingBox(r *baseReader) (BoundingBox, error) {
 }
 
 type StringPair struct {
-	Key   string
-	Value string
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type Ref struct {
