@@ -400,6 +400,19 @@ func (r *Relation) Name() string {
 	return ""
 }
 
+func (r *Relation) Clone() *Relation {
+	refs := make([]Ref, len(r.Refs))
+	copy(refs, r.Refs)
+	tags := make([]StringPair, len(r.Tags))
+	copy(tags, r.Tags)
+	return &Relation{
+		Id:   r.Id,
+		Meta: r.Meta,
+		Refs: refs,
+		Tags: tags,
+	}
+}
+
 func parseRelation(r *baseReader, length int, prev *Relation, refIds []int64) error {
 	offset := r.Offset()
 	prev.Id += r.ReadSigned()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/alecthomas/kingpin"
@@ -51,10 +52,11 @@ func countFn() error {
 }
 
 var (
-	geojsonCmd  = app.Command("geojson", "convert o5m to geojson")
-	geojsonPath = geojsonCmd.Arg("path", "o5m file path").Required().String()
-	geojsonDb   = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
-	geojsonId   = geojsonCmd.Flag("id", "relation id").String()
+	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
+	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
+	geojsonDb      = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
+	geojsonId      = geojsonCmd.Flag("id", "relation id").String()
+	geojsonWorkers = geojsonCmd.Flag("workers", "workers count").Default("1").Int()
 )
 
 type ESDoc struct {
@@ -63,8 +65,26 @@ type ESDoc struct {
 	Source *RelationJson `json:"_source"`
 }
 
+func processRelation(db *WaysDb, rel *Relation) (string, error) {
+	js, err := buildRelation(rel, db)
+	if err != nil {
+		return "", err
+	}
+	if js == nil {
+		return "", nil
+	}
+	doc := ESDoc{
+		Id:     js.Id,
+		Type:   "boundary",
+		Source: js,
+	}
+	data, err := json.Marshal(&doc)
+	return string(data), err
+}
+
 func geojsonFn() error {
 	start := time.Now()
+	workers := *geojsonWorkers
 	r, err := NewO5MReader(*geojsonPath)
 	if err != nil {
 		return err
@@ -80,42 +100,75 @@ func geojsonFn() error {
 			return fmt.Errorf("invalid relation identifier: %s", err)
 		}
 	}
+
+	type Request struct {
+		Relation *Relation
+		Output   string
+		Err      error
+	}
+	pendings := make(chan Request)
+	results := make(chan Request)
+	running := sync.WaitGroup{}
+	done := make(chan bool)
+	for i := 0; i < workers; i++ {
+		running.Add(1)
+		go func() {
+			defer running.Done()
+			for rq := range pendings {
+				data, err := processRelation(db, rq.Relation)
+				if err != nil {
+					rq.Err = err
+				} else {
+					rq.Output = data
+				}
+				results <- rq
+			}
+		}()
+	}
+	go func() {
+		running.Wait()
+		close(results)
+	}()
 	seen := 0
 	converted := 0
+	go func() {
+		for rq := range results {
+			seen++
+			if seen%100 == 0 {
+				fmt.Fprintf(os.Stderr, "converted %d/%d\n", converted, seen)
+			}
+			rel := rq.Relation
+			if rq.Err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR %d %s: %s\n", rel.Id, rel.Name(), rq.Err)
+				continue
+			}
+			if rq.Output == "" {
+				continue
+			}
+			fmt.Println(rq.Output)
+			converted++
+		}
+		close(done)
+	}()
+
 	for r.Next() {
 		if r.Kind() != RelationKind {
 			continue
 		}
-		seen++
 		rel := r.Relation()
 		if relId >= 0 && relId != rel.Id {
 			continue
 		}
-		if seen%100 == 0 {
-			fmt.Fprintf(os.Stderr, "converted %d/%d\n", converted, seen)
+		rq := Request{
+			Relation: rel.Clone(),
 		}
-		js, err := buildRelation(rel, db)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR %d %s: %s\n", rel.Id, rel.Name(), err)
-		}
-		if js == nil {
-			continue
-		}
-		doc := ESDoc{
-			Id:     js.Id,
-			Type:   "boundary",
-			Source: js,
-		}
-		data, err := json.Marshal(&doc)
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(data))
-		converted++
+		pendings <- rq
 	}
+	close(pendings)
 	if r.Err() != nil {
 		return r.Err()
 	}
+	<-done
 	end := time.Now()
 	duration := (end.Sub(start) / time.Second)
 	fmt.Fprintf(os.Stderr, "written: %d/%d in %ds\n", converted, seen, duration)
