@@ -391,6 +391,15 @@ type Relation struct {
 	Tags []StringPair
 }
 
+func (r *Relation) Name() string {
+	for _, tag := range r.Tags {
+		if tag.Key == "name" {
+			return tag.Value
+		}
+	}
+	return ""
+}
+
 func parseRelation(r *baseReader, length int, prev *Relation, refIds []int64) error {
 	offset := r.Offset()
 	prev.Id += r.ReadSigned()

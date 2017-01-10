@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/alecthomas/kingpin"
 )
@@ -52,6 +53,7 @@ var (
 	geojsonCmd  = app.Command("geojson", "convert o5m to geojson")
 	geojsonPath = geojsonCmd.Arg("path", "o5m file path").Required().String()
 	geojsonDb   = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
+	geojsonId   = geojsonCmd.Flag("id", "relation id").String()
 )
 
 type ESDoc struct {
@@ -69,6 +71,13 @@ func geojsonFn() error {
 	if err != nil {
 		return err
 	}
+	relId := int64(-1)
+	if *geojsonId != "" {
+		relId, err = strconv.ParseInt(*geojsonId, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid relation identifier: %s", err)
+		}
+	}
 	seen := 0
 	converted := 0
 	for r.Next() {
@@ -77,9 +86,15 @@ func geojsonFn() error {
 		}
 		seen++
 		rel := r.Relation()
+		if relId >= 0 && relId != rel.Id {
+			continue
+		}
+		if seen%100 == 0 {
+			fmt.Fprintf(os.Stderr, "converted %d/%d\n", converted, seen)
+		}
 		js, err := buildRelation(rel, db)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR %d %s\n", rel.Id, err)
+			fmt.Fprintf(os.Stderr, "ERROR %d %s: %s\n", rel.Id, rel.Name(), err)
 		}
 		if js == nil {
 			continue

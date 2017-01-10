@@ -44,7 +44,7 @@ func TestCloseRings(t *testing.T) {
 		makeSegments(0, 3, 2, 4, 6, 1, 8, 7, 5, 0),
 	}
 	for _, test := range tests {
-		rings, err := closeRings(test)
+		rings, err := makeRings(test)
 		if err != nil {
 			t.Fatal(err)
 		}

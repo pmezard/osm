@@ -91,192 +91,25 @@ func buildNodeArray(r *O5MReader) (NodePoints, error) {
 	return NodePoints(points), r.Seek(resets[1])
 }
 
-type Linestring struct {
-	Id     int64   `json:"id"`
-	Role   string  `json:"role"`
-	Points []Point `json:"points"`
-}
-
-func buildWay(way *Way, nodes NodePoints) (*Linestring, error) {
-	points := make([]Point, len(way.Nodes))
-	for i, n := range way.Nodes {
-		p, err := nodes.FindPoint(n)
-		if err != nil {
-			return nil, err
-		}
-		points[i] = p.Point
-	}
-	return &Linestring{
-		Id:     way.Id,
-		Points: points,
-	}, nil
-}
-
-func reverseRing(r *Linestring) {
-	for i := 0; i < len(r.Points)/2; i++ {
-		j := len(r.Points) - 1 - i
-		r.Points[i], r.Points[j] = r.Points[j], r.Points[i]
-	}
-}
-
-func mergeRings(r1, r2 *Linestring) {
-	if r1.Points[0] == r2.Points[0] {
-		reverseRing(r1)
-	} else if r1.Points[len(r1.Points)-1] == r2.Points[len(r2.Points)-1] {
-		reverseRing(r2)
-	}
-	if r1.Points[len(r1.Points)-1] == r2.Points[0] {
-		r1.Points = append(r1.Points, r2.Points[1:]...)
-	} else if r1.Points[0] == r2.Points[len(r2.Points)-1] {
-		r1.Points = append(r2.Points, r1.Points[1:]...)
-	} else {
-		panic("ring endpoints mismatch")
-	}
-}
-
-func closeRings(rings []*Linestring) ([]*Linestring, error) {
-	closed := []*Linestring{}
-	open := []*Linestring{}
-	for _, ring := range rings {
-		if len(ring.Points) > 2 && ring.Points[0] == ring.Points[len(ring.Points)-1] {
-			closed = append(closed, ring)
-		} else {
-			open = append(open, ring)
-		}
-	}
-	if len(open) == 0 {
-		return closed, nil
-	}
-	endPoints := map[Point][]int{}
-	for i, ring := range open {
-		first := ring.Points[0]
-		last := ring.Points[len(ring.Points)-1]
-		endPoints[first] = append(endPoints[first], i)
-		endPoints[last] = append(endPoints[last], i)
-	}
-	for i := range open {
-		ring := open[i]
-		if ring == nil {
-			continue
-		}
-		open[i] = nil
-		for {
-		Next:
-			first := ring.Points[0]
-			last := ring.Points[len(ring.Points)-1]
-			for _, p := range []Point{first, last} {
-				endPoint := endPoints[p]
-				if len(endPoint) != 2 {
-					return nil, fmt.Errorf("endpoint shared by more than one ring")
-				}
-				for _, j := range endPoint {
-					other := open[j]
-					if other == nil {
-						continue
-					}
-					mergeRings(ring, other)
-					open[j] = nil
-					goto Next
-				}
-			}
-			break
-		}
-		if ring.Points[0] == ring.Points[len(ring.Points)-1] {
-			closed = append(closed, ring)
-		} else {
-			return nil, fmt.Errorf("could not merge rings")
-		}
-	}
-	return closed, nil
-}
-
-func createGeosPoint(p Point) geos.Coord {
-	return geos.Coord{
-		X: float64(p.Lon) / 1e7,
-		Y: float64(p.Lat) / 1e7,
-	}
-}
-
-func createGeosPolygon(ring *Linestring) (*geos.Geometry, error) {
-	if len(ring.Points) < 4 {
-		panic("not enough points")
-	}
-	if ring.Points[0] != ring.Points[len(ring.Points)-1] {
-		panic("unclosed")
-	}
-	coords := make([]geos.Coord, len(ring.Points))
-	for i := range coords {
-		coords[i] = createGeosPoint(ring.Points[i])
-	}
-	poly, err := geos.NewPolygon(coords)
-	if err != nil {
-		return nil, err
-	}
-	// Poor man's solution to handle invalid polygons
-	return poly.Buffer(0)
-}
-
-func createGeosGeometry(outer *Linestring, inner []*Linestring) (*geos.Geometry, error) {
-	// Merge inner polygons with a single call to UnaryUnion, much faster than
-	// calling Union repeatedly.
-	innerPolys := make([]*geos.Geometry, 0, len(inner))
-	for _, ring := range inner {
-		p, err := createGeosPolygon(ring)
-		if err != nil {
-			return nil, err
-		}
-		innerPolys = append(innerPolys, p)
-	}
-	collection, err := geos.NewCollection(geos.MULTIPOLYGON, innerPolys...)
-	if err != nil {
-		return nil, err
-	}
-	merged, err := collection.UnaryUnion()
-	if err != nil {
-		return nil, err
-	}
-	// Then substract from the outer ring
-	o, err := createGeosPolygon(outer)
-	if err != nil {
-		return nil, err
-	}
-	return o.Difference(merged)
-}
-
-func buildGeometry(rings []*Linestring) (*geos.Geometry, error) {
+func buildGeometry(rings []*Linestring) ([]*geos.Geometry, error) {
 	// Bail out on non-ring inputs
-	inner := []*Linestring{}
-	outer := []*Linestring{}
 	for _, ring := range rings {
-		if ring.Role == "inner" {
-			inner = append(inner, ring)
-		} else if ring.Role == "outer" || ring.Role == "" {
-			outer = append(outer, ring)
+		if ring.Role == "inner" || ring.Role == "outer" || ring.Role == "" {
+			continue
 		} else {
 			return nil, fmt.Errorf("unsupported ring role: %s", ring.Role)
 		}
 	}
-	inner, err := closeRings(inner)
+	all, err := makeRings(rings)
 	if err != nil {
 		return nil, err
 	}
-	outer, err = closeRings(outer)
-	if err != nil {
-		return nil, err
-	}
-	if len(outer) > 1 {
-		// Multiple outer include the island within island case which probably
-		// requires some hierarchical containment test.
-		return nil, fmt.Errorf("cannot handle geometry with multiple outer rings")
-	} else if len(outer) == 0 {
-		return nil, fmt.Errorf("no outer ring")
-	}
-	return createGeosGeometry(outer[0], inner)
+	return makePolygons(all)
 }
 
 type Location struct {
-	Type        string        `json:"type"`
-	Coordinates [][][]float64 `json:"coordinates"`
+	Type        string          `json:"type"`
+	Coordinates [][][][]float64 `json:"coordinates"`
 }
 
 func linearRingToJson(r *geos.Geometry) ([][]float64, error) {
@@ -326,53 +159,57 @@ func reverseJsonRing(ring [][]float64) {
 	}
 }
 
-func geosToJson(g *geos.Geometry) ([]*Location, error) {
-	typ, err := g.Type()
-	if err != nil {
-		return nil, err
-	}
-	if typ != geos.POLYGON {
-		return nil, fmt.Errorf("cannot handle geometry type: %d", typ)
-	}
-	geomCount, err := g.NGeometry()
-	if err != nil {
-		return nil, err
-	}
-	if geomCount <= 0 {
-		return nil, fmt.Errorf("empty geometry")
-	}
+func polygonsToJson(polygons []*geos.Geometry) (*Location, error) {
 	loc := &Location{
-		Type: "polygon",
+		Type: "multipolygon",
 	}
-	shell, err := g.Shell()
-	if err != nil {
-		return nil, err
-	}
-	holes, err := g.Holes()
-	if err != nil {
-		return nil, err
-	}
-	rings := make([][][]float64, 0, len(holes)+1)
-	inner, err := linearRingToJson(shell)
-	if err != nil {
-		return nil, fmt.Errorf("cannot extract inner ring: %s", err)
-	}
-	if isClockwise(inner) {
-		reverseJsonRing(inner)
-	}
-	rings = append(rings, inner)
-	for _, hole := range holes {
-		outer, err := linearRingToJson(hole)
+	shapes := [][][][]float64{}
+	for _, g := range polygons {
+		typ, err := g.Type()
 		if err != nil {
-			return nil, fmt.Errorf("cannot extract outer ring: %s", err)
+			return nil, err
 		}
-		if !isClockwise(outer) {
-			reverseJsonRing(outer)
+		if typ != geos.POLYGON {
+			return nil, fmt.Errorf("cannot handle geometry type: %d", typ)
 		}
-		rings = append(rings, outer)
+		geomCount, err := g.NGeometry()
+		if err != nil {
+			return nil, err
+		}
+		if geomCount <= 0 {
+			return nil, fmt.Errorf("empty geometry")
+		}
+		shell, err := g.Shell()
+		if err != nil {
+			return nil, err
+		}
+		holes, err := g.Holes()
+		if err != nil {
+			return nil, err
+		}
+		rings := make([][][]float64, 0, len(holes)+1)
+		inner, err := linearRingToJson(shell)
+		if err != nil {
+			return nil, fmt.Errorf("cannot extract inner ring: %s", err)
+		}
+		if isClockwise(inner) {
+			reverseJsonRing(inner)
+		}
+		rings = append(rings, inner)
+		for _, hole := range holes {
+			outer, err := linearRingToJson(hole)
+			if err != nil {
+				return nil, fmt.Errorf("cannot extract outer ring: %s", err)
+			}
+			if !isClockwise(outer) {
+				reverseJsonRing(outer)
+			}
+			rings = append(rings, outer)
+		}
+		shapes = append(shapes, rings)
 	}
-	loc.Coordinates = rings
-	return []*Location{loc}, nil
+	loc.Coordinates = shapes
+	return loc, nil
 }
 
 type RelationJson struct {
@@ -382,20 +219,17 @@ type RelationJson struct {
 	Tags     []StringPair `json:"tags"`
 }
 
-func makeJsonRelation(rel *Relation, g *geos.Geometry) (*RelationJson, error) {
-	locations, err := geosToJson(g)
+func makeJsonRelation(rel *Relation, polygons []*geos.Geometry) (*RelationJson, error) {
+	if len(polygons) == 0 {
+		return nil, fmt.Errorf("empty relation")
+	}
+	location, err := polygonsToJson(polygons)
 	if err != nil {
 		return nil, err
 	}
-	if len(locations) > 1 {
-		return nil, fmt.Errorf("cannot handle multipart json geometries")
-	}
-	if len(locations) == 0 {
-		return nil, fmt.Errorf("cannot build relation json")
-	}
 	r := &RelationJson{
 		Id:       strconv.Itoa(int(rel.Id)),
-		Location: *locations[0],
+		Location: *location,
 	}
 	for _, tag := range rel.Tags {
 		if tag.Key == "name" {
@@ -404,15 +238,6 @@ func makeJsonRelation(rel *Relation, g *geos.Geometry) (*RelationJson, error) {
 		r.Tags = append(r.Tags, tag)
 	}
 	return r, nil
-}
-
-func isMultiPolygon(rel *Relation) bool {
-	for _, tag := range rel.Tags {
-		if tag.Key == "type" && tag.Value == "multipolygon" {
-			return true
-		}
-	}
-	return false
 }
 
 type sortedRefs []Ref
@@ -471,9 +296,6 @@ func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
 }
 
 func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
-	if isMultiPolygon(rel) {
-		return nil, fmt.Errorf("cannot handle multipolygons: %d", rel.Id)
-	}
 	// Collect way ids and sort them
 	wayIds, err := collectWayRefs(rel)
 	if err != nil {
@@ -483,11 +305,11 @@ func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, err := buildGeometry(rings)
+	polygons, err := buildGeometry(rings)
 	if err != nil {
 		return nil, err
 	}
-	return makeJsonRelation(rel, g)
+	return makeJsonRelation(rel, polygons)
 }
 
 func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
@@ -497,7 +319,7 @@ func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
 			continue
 		}
 		w := r.Way()
-		ring, err := buildWay(w, nodes)
+		ring, err := buildLinestring(w, nodes)
 		if err != nil {
 			return err
 		}
