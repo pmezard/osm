@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/alecthomas/kingpin"
 )
@@ -63,6 +64,7 @@ type ESDoc struct {
 }
 
 func geojsonFn() error {
+	start := time.Now()
 	r, err := NewO5MReader(*geojsonPath)
 	if err != nil {
 		return err
@@ -114,7 +116,9 @@ func geojsonFn() error {
 	if r.Err() != nil {
 		return r.Err()
 	}
-	fmt.Fprintf(os.Stderr, "written: %d/%d\n", converted, seen)
+	end := time.Now()
+	duration := (end.Sub(start) / time.Second)
+	fmt.Fprintf(os.Stderr, "written: %d/%d in %ds\n", converted, seen, duration)
 	return nil
 }
 
