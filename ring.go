@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/paulsmith/gogeos/geos"
@@ -99,6 +100,62 @@ func (r *RingParts) Pop() *Linestring {
 	return p
 }
 
+func makeEndpoints(lines []*Linestring) map[Point][]*Linestring {
+	endPoints := make(map[Point][]*Linestring, len(lines)/2)
+	for _, line := range lines {
+		start := line.Start()
+		end := line.End()
+		endPoints[start] = append(endPoints[start], line)
+		endPoints[end] = append(endPoints[end], line)
+	}
+	return endPoints
+}
+
+func mergeLines(l1, l2 *Linestring) {
+	if l1.Start() == l2.Start() || l1.End() == l2.End() {
+		l2.Reverse()
+	}
+	if l1.End() == l2.Start() {
+		l1.Points = append(l1.Points, l2.Points[1:]...)
+	} else if l1.Start() == l2.End() {
+		l1.Points = append(l2.Points, l1.Points[1:]...)
+	} else {
+		panic("unrelated lines")
+	}
+}
+
+func mergeArcs(lines []*Linestring) []*Linestring {
+	endPoints := map[Point][]int{}
+	for i, line := range lines {
+		start := line.Start()
+		end := line.End()
+		endPoints[start] = append(endPoints[start], i)
+		endPoints[end] = append(endPoints[end], i)
+	}
+
+	uf := NewUnionFind(len(lines))
+	for _, indices := range endPoints {
+		if len(indices) != 2 {
+			continue
+		}
+		i := uf.Find(indices[0])
+		j := uf.Find(indices[1])
+		if i == j {
+			continue
+		}
+		uf.Merge(i, j)
+		mergeLines(lines[i], lines[j])
+		lines[uf.Find(i)] = lines[i]
+	}
+	kept := []*Linestring{}
+	for i, line := range lines {
+		if uf.Find(i) == i {
+			kept = append(kept, line)
+		}
+	}
+	return kept
+}
+
 // Combine all Linestrings into a single one. Panic if RingParts is not closed
 // or is empty.
 func (r *RingParts) MakeRing() *Linestring {
@@ -187,13 +244,8 @@ func makeRing(parts RingParts, endPoints map[Point][]*Linestring,
 // Linestring first and last points are equal. The call fails if not all lines
 // end in a ring.
 func makeRings(lines []*Linestring) ([]*Linestring, error) {
-	endPoints := make(map[Point][]*Linestring, len(lines)/2)
-	for _, line := range lines {
-		start := line.Start()
-		end := line.End()
-		endPoints[start] = append(endPoints[start], line)
-		endPoints[end] = append(endPoints[end], line)
-	}
+	lines = mergeArcs(lines)
+	endPoints := makeEndpoints(lines)
 
 	rings := []*Linestring{}
 	seen := map[int64]bool{}
@@ -214,4 +266,29 @@ func makeRings(lines []*Linestring) ([]*Linestring, error) {
 		rings = append(rings, r)
 	}
 	return rings, nil
+}
+
+func linestringToJson(lines []*Linestring) string {
+	type Js struct {
+		Type   string        `json:"type"`
+		Coords [][][]float64 `json:"coordinates"`
+	}
+	js := Js{
+		Type: "MultiLineString",
+	}
+	for _, line := range lines {
+		points := make([][]float64, len(line.Points))
+		for i, p := range line.Points {
+			points[i] = []float64{
+				float64(p.Lon) / 1e7,
+				float64(p.Lat) / 1e7,
+			}
+		}
+		js.Coords = append(js.Coords, points)
+	}
+	data, err := json.Marshal(&js)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
 }
