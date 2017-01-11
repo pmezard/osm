@@ -154,7 +154,9 @@ func isValidRing(r *Linestring) bool {
 	return true
 }
 
-func makeRing(parts RingParts, lines []*Linestring, seen map[int64]bool) *Linestring {
+func makeRing(parts RingParts, endPoints map[Point][]*Linestring,
+	seen map[int64]bool) *Linestring {
+
 	if parts.Start() == parts.End() {
 		r := parts.MakeRing()
 		if !isValidRing(r) {
@@ -162,8 +164,7 @@ func makeRing(parts RingParts, lines []*Linestring, seen map[int64]bool) *Linest
 		}
 		return r
 	}
-	// TODO: collect end points in a map to speedup iterations
-	for _, next := range lines {
+	for _, next := range endPoints[parts.End()] {
 		if seen[next.Id] {
 			continue
 		}
@@ -172,7 +173,7 @@ func makeRing(parts RingParts, lines []*Linestring, seen map[int64]bool) *Linest
 		}
 		seen[next.Id] = true
 		parts.Push(next)
-		r := makeRing(parts, lines, seen)
+		r := makeRing(parts, endPoints, seen)
 		if r != nil {
 			return r
 		}
@@ -186,6 +187,14 @@ func makeRing(parts RingParts, lines []*Linestring, seen map[int64]bool) *Linest
 // Linestring first and last points are equal. The call fails if not all lines
 // end in a ring.
 func makeRings(lines []*Linestring) ([]*Linestring, error) {
+	endPoints := make(map[Point][]*Linestring, len(lines)/2)
+	for _, line := range lines {
+		start := line.Start()
+		end := line.End()
+		endPoints[start] = append(endPoints[start], line)
+		endPoints[end] = append(endPoints[end], line)
+	}
+
 	rings := []*Linestring{}
 	seen := map[int64]bool{}
 	for _, line := range lines {
@@ -198,11 +207,21 @@ func makeRings(lines []*Linestring) ([]*Linestring, error) {
 			start: line.Start(),
 			end:   line.End(),
 		}
-		r := makeRing(parts, lines, seen)
+		r := makeRing(parts, endPoints, seen)
 		if r == nil {
-			return nil, fmt.Errorf("could not close ring")
+			delete(seen, line.Id)
+			continue
 		}
 		rings = append(rings, r)
+	}
+	unmatched := 0
+	for _, line := range lines {
+		if !seen[line.Id] {
+			unmatched++
+		}
+	}
+	if unmatched > 0 {
+		return nil, fmt.Errorf("could not close rings: %d/%d", unmatched, len(lines))
 	}
 	return rings, nil
 }

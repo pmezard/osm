@@ -264,8 +264,9 @@ var (
 	}
 )
 
-func collectWayRefs(rel *Relation) ([]Ref, error) {
+func collectWayRefs(rel *Relation) ([]Ref, []Ref, error) {
 	wayIds := []Ref{}
+	relIds := []Ref{}
 	for _, ref := range rel.Refs {
 		if ref.Type != 1 {
 			if ref.Type == 0 {
@@ -273,22 +274,27 @@ func collectWayRefs(rel *Relation) ([]Ref, error) {
 				continue
 			} else if ref.Type == 2 {
 				// Relation
+				if ref.Role == "outer" || ref.Role == "inner" {
+					// Relations made of other relations (France borders)
+					relIds = append(relIds, ref)
+					continue
+				}
 				if IgnoredRelations[ref.Role] {
 					continue
 				}
-				return nil, fmt.Errorf("cannot handle relation relation: %s", ref.Role)
+				return nil, nil, fmt.Errorf("cannot handle relation relation: %s", ref.Role)
 			} else {
-				return nil, fmt.Errorf("unsupported reference type: %d", ref.Type)
+				return nil, nil, fmt.Errorf("unsupported reference type: %d", ref.Type)
 			}
 		}
 		wayIds = append(wayIds, ref)
 	}
 	sort.Sort(sortedRefs(wayIds))
-	return wayIds, nil
+	sort.Sort(sortedRefs(relIds))
+	return wayIds, relIds, nil
 }
 
 func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
-	// Resolve ways in a single scan
 	rings := []*Linestring{}
 	if len(wayIds) <= 0 {
 		return rings, nil
@@ -299,10 +305,43 @@ func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
 			return nil, err
 		}
 		if ring == nil {
-			continue
+			return nil, fmt.Errorf("cannot resolve way: %d", ref.Id)
 		}
 		ring.Role = ref.Role
 		rings = append(rings, ring)
+	}
+	return rings, nil
+}
+
+func collectRelationWays(relIds []Ref, db *WaysDb) ([]*Linestring, error) {
+	rings := []*Linestring{}
+	if len(relIds) <= 0 {
+		return rings, nil
+	}
+	for _, ref := range relIds {
+		rel, err := db.GetRelation(ref.Id)
+		if err != nil {
+			return nil, err
+		}
+		if rel == nil {
+			return nil, fmt.Errorf("cannot resolve subrelation: %d", ref.Id)
+		}
+		wayIds, subIds, err := collectWayRefs(rel)
+		if err != nil {
+			return nil, err
+		}
+		if len(subIds) > 0 {
+			lines, err := collectRelationWays(subIds, db)
+			if err != nil {
+				return nil, err
+			}
+			rings = append(rings, lines...)
+		}
+		ways, err := collectWayGeometries(wayIds, db)
+		if err != nil {
+			return nil, err
+		}
+		rings = append(rings, ways...)
 	}
 	return rings, nil
 }
@@ -328,8 +367,8 @@ func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	if isCollection(rel) {
 		return nil, nil
 	}
-	// Collect way ids and sort them
-	wayIds, err := collectWayRefs(rel)
+	// Collect way and relation ids and sort them
+	wayIds, relIds, err := collectWayRefs(rel)
 	if err != nil {
 		return nil, err
 	}
@@ -337,6 +376,11 @@ func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	if err != nil {
 		return nil, err
 	}
+	subRings, err := collectRelationWays(relIds, db)
+	if err != nil {
+		return nil, err
+	}
+	rings = append(rings, subRings...)
 	polygons, err := buildGeometry(rings)
 	if err != nil {
 		return nil, err
@@ -368,15 +412,50 @@ func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
 }
 
 func indexRelations(r *O5MReader, db *WaysDb) error {
+	// List relations to collect
+	fmt.Println("listing relations to collect")
+	kept := map[int64]bool{}
+	resets := []ResetPoint{}
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			if r.Kind() == ResetKind {
+				resets = append(resets, r.ResetPoint())
+			}
+			continue
+		}
+		rel := r.Relation()
+		if isMultilineString(rel) {
+			kept[rel.Id] = true
+			continue
+		}
+		for _, ref := range rel.Refs {
+			if ref.Type != 2 {
+				continue
+			}
+			if ref.Role != "inner" && ref.Role != "outer" {
+				continue
+			}
+			kept[ref.Id] = true
+		}
+	}
+	if len(resets) != 3 {
+		return fmt.Errorf("could not collect reset points")
+	}
+	fmt.Println("collecting")
+	err := r.Seek(resets[2])
+	if err != nil {
+		return err
+	}
 	i := 0
 	for r.Next() {
 		if r.Kind() != RelationKind {
 			continue
 		}
 		rel := r.Relation()
-		if !isMultilineString(rel) {
+		if !kept[rel.Id] {
 			continue
 		}
+		fmt.Println("indexing", rel.Name())
 		err := db.PutRelation(rel)
 		if err != nil {
 			return err
@@ -386,5 +465,6 @@ func indexRelations(r *O5MReader, db *WaysDb) error {
 			fmt.Println("indexed", i)
 		}
 	}
+	fmt.Println("indexed", i)
 	return r.Err()
 }
