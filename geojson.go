@@ -364,7 +364,7 @@ func isCollection(rel *Relation) bool {
 }
 
 func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
-	if isCollection(rel) {
+	if isCollection(rel) || isMultilineString(rel) {
 		return nil, nil
 	}
 	// Collect way and relation ids and sort them

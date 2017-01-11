@@ -209,19 +209,9 @@ func makeRings(lines []*Linestring) ([]*Linestring, error) {
 		}
 		r := makeRing(parts, endPoints, seen)
 		if r == nil {
-			delete(seen, line.Id)
-			continue
+			return nil, fmt.Errorf("cannot close ring: %d", line.Id)
 		}
 		rings = append(rings, r)
-	}
-	unmatched := 0
-	for _, line := range lines {
-		if !seen[line.Id] {
-			unmatched++
-		}
-	}
-	if unmatched > 0 {
-		return nil, fmt.Errorf("could not close rings: %d/%d", unmatched, len(lines))
 	}
 	return rings, nil
 }
