@@ -204,6 +204,28 @@ func indexWaysFn() error {
 	return indexWays(r, nodes, db)
 }
 
+var (
+	indexRelationsCmd = app.Command("indexrelations",
+		"index multistring relations in k/v store")
+	indexRelationsO5m = indexRelationsCmd.Arg("o5mPath", "o5m file path").
+				Required().String()
+	indexRelationsDb = indexRelationsCmd.Arg("dbPath", "output DB path").
+				Required().String()
+)
+
+func indexRelationsFn() error {
+	r, err := NewO5MReader(*indexRelationsO5m)
+	if err != nil {
+		return err
+	}
+	db, err := OpenWaysDb(*indexRelationsDb)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return indexRelations(r, db)
+}
+
 func dispatch() error {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	switch cmd {
@@ -213,6 +235,8 @@ func dispatch() error {
 		return geojsonFn()
 	case indexWaysCmd.FullCommand():
 		return indexWaysFn()
+	case indexRelationsCmd.FullCommand():
+		return indexRelationsFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }

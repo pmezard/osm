@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	waysBucket = []byte("ways")
+	waysBucket      = []byte("ways")
+	relationsBucket = []byte("relations")
 )
 
 type WaysDb struct {
@@ -26,8 +27,13 @@ func OpenWaysDb(path string) (*WaysDb, error) {
 		}
 	}()
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(waysBucket)
-		return err
+		for _, name := range [][]byte{waysBucket, relationsBucket} {
+			_, err := tx.CreateBucketIfNotExists(name)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -52,27 +58,53 @@ func makeByteKey(id int64) []byte {
 	return buf[:n]
 }
 
-func (db *WaysDb) Put(w *Linestring) error {
-	data, err := json.Marshal(w)
+func (db *WaysDb) putJson(bucket []byte, id int64, o interface{}) error {
+	data, err := json.Marshal(o)
 	if err != nil {
 		return err
 	}
-	key := makeByteKey(w.Id)
+	key := makeByteKey(id)
 	return db.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(waysBucket).Put(key, data)
+		return tx.Bucket(bucket).Put(key, data)
 	})
 }
 
-func (db *WaysDb) Get(id int64) (*Linestring, error) {
+func (db *WaysDb) getJson(bucket []byte, id int64, o interface{}) (bool, error) {
 	key := makeByteKey(id)
-	w := &Linestring{}
+	found := false
 	err := db.db.View(func(tx *bolt.Tx) error {
-		data := tx.Bucket(waysBucket).Get(key)
+		data := tx.Bucket(bucket).Get(key)
 		if data == nil {
-			w = nil
 			return nil
 		}
-		return json.Unmarshal(data, w)
+		found = true
+		return json.Unmarshal(data, o)
 	})
+	return found, err
+}
+
+func (db *WaysDb) Put(w *Linestring) error {
+	return db.putJson(waysBucket, w.Id, w)
+}
+
+func (db *WaysDb) Get(id int64) (*Linestring, error) {
+	w := &Linestring{}
+	ok, err := db.getJson(waysBucket, id, w)
+	if !ok {
+		w = nil
+	}
 	return w, err
+}
+
+func (db *WaysDb) PutRelation(r *Relation) error {
+	return db.putJson(relationsBucket, r.Id, r)
+}
+
+func (db *WaysDb) GetRelation(id int64) (*Relation, error) {
+	r := &Relation{}
+	ok, err := db.getJson(relationsBucket, id, r)
+	if !ok {
+		r = nil
+	}
+	return r, err
 }

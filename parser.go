@@ -272,17 +272,17 @@ type StringPair struct {
 }
 
 type Ref struct {
-	Id   int64
-	Type int
-	Role string
+	Id   int64  `json:"id"`
+	Type int    `json:"type"`
+	Role string `json:"role"`
 }
 
 type Metadata struct {
-	Version   int
-	Timestamp int
-	Changeset int
-	Uid       string
-	Author    string
+	Version   int    `json:"version"`
+	Timestamp int    `json:"timestamp"`
+	Changeset int    `json:"changeset"`
+	Uid       string `json:"uuid"`
+	Author    string `json:"author"`
 }
 
 type Node struct {
@@ -385,10 +385,10 @@ func parseWay(r *baseReader, length int, prev *Way, nodeId int64) (int64, error)
 }
 
 type Relation struct {
-	Id   int64
-	Meta Metadata
-	Refs []Ref
-	Tags []StringPair
+	Id   int64        `json:"id"`
+	Meta Metadata     `json:"meta"`
+	Refs []Ref        `json:"refs"`
+	Tags []StringPair `json:"tags"`
 }
 
 func (r *Relation) Name() string {

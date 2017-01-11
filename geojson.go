@@ -334,3 +334,34 @@ func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
 	}
 	return r.Err()
 }
+
+func isMultilineString(rel *Relation) bool {
+	for _, tag := range rel.Tags {
+		if tag.Key == "type" && tag.Value == "multilinestring" {
+			return true
+		}
+	}
+	return false
+}
+
+func indexRelations(r *O5MReader, db *WaysDb) error {
+	i := 0
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		if !isMultilineString(rel) {
+			continue
+		}
+		err := db.PutRelation(rel)
+		if err != nil {
+			return err
+		}
+		i++
+		if (i % 100) == 0 {
+			fmt.Println("indexed", i)
+		}
+	}
+	return r.Err()
+}
