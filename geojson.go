@@ -254,20 +254,32 @@ func (s sortedRefs) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+var (
+	IgnoredRelations = map[string]bool{
+		"":                true, // at least on France/Spain shared territory
+		"subarea":         true, // related but takes no part in geometry
+		"subarea:FIXME":   true,
+		"collection":      true, // deprecated
+		"disused:subarea": true,
+	}
+)
+
 func collectWayRefs(rel *Relation) ([]Ref, error) {
 	wayIds := []Ref{}
 	for _, ref := range rel.Refs {
-		if ref.Type == 0 {
-			if ref.Role == "admin_centre" || ref.Role == "label" {
-				continue
-			}
-			return nil, fmt.Errorf("cannot handle node relation: %s", ref.Role)
-		}
 		if ref.Type != 1 {
-			if ref.Role == "subarea" {
+			if ref.Type == 0 {
+				// Points
 				continue
+			} else if ref.Type == 2 {
+				// Relation
+				if IgnoredRelations[ref.Role] {
+					continue
+				}
+				return nil, fmt.Errorf("cannot handle relation relation: %s", ref.Role)
+			} else {
+				return nil, fmt.Errorf("unsupported reference type: %d", ref.Type)
 			}
-			return nil, fmt.Errorf("cannot handle relation relation: %s", ref.Role)
 		}
 		wayIds = append(wayIds, ref)
 	}
@@ -295,7 +307,27 @@ func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
 	return rings, nil
 }
 
+func getTag(rel *Relation, key string) string {
+	for _, tag := range rel.Tags {
+		if tag.Key == "type" {
+			return tag.Value
+		}
+	}
+	return ""
+}
+
+func isMultilineString(rel *Relation) bool {
+	return getTag(rel, "type") == "multilinestring"
+}
+
+func isCollection(rel *Relation) bool {
+	return getTag(rel, "type") == "collection"
+}
+
 func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
+	if isCollection(rel) {
+		return nil, nil
+	}
 	// Collect way ids and sort them
 	wayIds, err := collectWayRefs(rel)
 	if err != nil {
@@ -333,15 +365,6 @@ func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
 		}
 	}
 	return r.Err()
-}
-
-func isMultilineString(rel *Relation) bool {
-	for _, tag := range rel.Tags {
-		if tag.Key == "type" && tag.Value == "multilinestring" {
-			return true
-		}
-	}
-	return false
 }
 
 func indexRelations(r *O5MReader, db *WaysDb) error {
