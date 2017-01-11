@@ -21,7 +21,7 @@ var (
 )
 
 func countFn() error {
-	r, err := NewO5MReader(*countPath)
+	r, err := NewO5MReader(*countPath, NodeKind, WayKind, RelationKind)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ var (
 )
 
 func indexRelationsFn() error {
-	r, err := NewO5MReader(*indexRelationsO5m)
+	r, err := NewO5MReader(*indexRelationsO5m, NodeKind, WayKind)
 	if err != nil {
 		return err
 	}
