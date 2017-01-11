@@ -55,6 +55,7 @@ var (
 	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
 	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
 	geojsonDb      = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
+	geojsonOutpath = geojsonCmd.Arg("outpath", "jsonl output path").Required().String()
 	geojsonId      = geojsonCmd.Flag("id", "relation id").String()
 	geojsonWorkers = geojsonCmd.Flag("workers", "workers count").Default("1").Int()
 )
@@ -93,6 +94,12 @@ func geojsonFn() error {
 	if err != nil {
 		return err
 	}
+	outFp, err := os.Create(*geojsonOutpath)
+	if err != nil {
+		return err
+	}
+	defer outFp.Close()
+
 	relId := int64(-1)
 	if *geojsonId != "" {
 		relId, err = strconv.ParseInt(*geojsonId, 10, 64)
@@ -145,7 +152,7 @@ func geojsonFn() error {
 			if rq.Output == "" {
 				continue
 			}
-			fmt.Println(rq.Output)
+			fmt.Fprintln(outFp, rq.Output)
 			converted++
 		}
 		close(done)
