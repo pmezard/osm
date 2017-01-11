@@ -158,13 +158,18 @@ func geojsonFn() error {
 		close(done)
 	}()
 
-	for r.Next() {
+	stop := false
+	for r.Next() && !stop {
 		if r.Kind() != RelationKind {
 			continue
 		}
 		rel := r.Relation()
-		if relId >= 0 && relId != rel.Id {
-			continue
+		if relId >= 0 {
+			if relId != rel.Id {
+				continue
+			} else {
+				stop = true
+			}
 		}
 		rq := Request{
 			Relation: rel.Clone(),
