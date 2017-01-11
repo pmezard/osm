@@ -86,7 +86,7 @@ func processRelation(db *WaysDb, rel *Relation) (string, error) {
 func geojsonFn() error {
 	start := time.Now()
 	workers := *geojsonWorkers
-	r, err := NewO5MReader(*geojsonPath)
+	r, err := NewO5MReader(*geojsonPath, NodeKind, WayKind)
 	if err != nil {
 		return err
 	}

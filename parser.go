@@ -477,10 +477,11 @@ const (
 )
 
 type O5MReader struct {
-	fp   *os.File
-	r    *baseReader
-	err  error
-	kind int
+	fp           *os.File
+	r            *baseReader
+	err          error
+	kind         int
+	ignoredKinds []bool
 
 	resetPoint  ResetPoint
 	boundingBox *BoundingBox
@@ -491,14 +492,23 @@ type O5MReader struct {
 	refIds      []int64
 }
 
-func NewO5MReader(path string) (*O5MReader, error) {
+func NewO5MReader(path string, ignoredKind ...int) (*O5MReader, error) {
+	ignoredKinds := make([]bool, RelationKind+1)
+	for _, k := range ignoredKind {
+		if k < NodeKind || k > len(ignoredKinds) {
+			return nil, fmt.Errorf("invalid ignored kind: %d", k)
+		}
+		ignoredKinds[k] = true
+	}
+
 	fp, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	r := &O5MReader{
-		fp: fp,
-		r:  NewBaseReader(fp),
+		fp:           fp,
+		r:            NewBaseReader(fp),
+		ignoredKinds: ignoredKinds,
 	}
 	err = parseHeader(r.r)
 	if err != nil {
@@ -545,36 +555,44 @@ func (r *O5MReader) Next() bool {
 		}
 		length := int(l)
 		start := r.r.Offset()
-		switch kind {
-		case NodeKind:
-			err := parseNode(r.r, length, &r.node)
+		if kind < len(r.ignoredKinds) && r.ignoredKinds[kind] {
+			_, err := r.r.Discard(length)
 			if err != nil {
 				r.err = err
 				return false
 			}
-		case WayKind:
-			nodeId, err := parseWay(r.r, length, &r.way, r.nodeId)
-			if err != nil {
-				r.err = err
+		} else {
+			switch kind {
+			case NodeKind:
+				err := parseNode(r.r, length, &r.node)
+				if err != nil {
+					r.err = err
+					return false
+				}
+			case WayKind:
+				nodeId, err := parseWay(r.r, length, &r.way, r.nodeId)
+				if err != nil {
+					r.err = err
+					return false
+				}
+				r.nodeId = nodeId
+			case RelationKind:
+				err := parseRelation(r.r, length, &r.relation, r.refIds)
+				if err != nil {
+					r.err = err
+					return false
+				}
+			case BBoxKind:
+				bb, err := parseBoundingBox(r.r)
+				if err != nil {
+					r.err = err
+					return false
+				}
+				r.boundingBox = &bb
+			default:
+				r.err = fmt.Errorf("unsupported dataset: %x", kind)
 				return false
 			}
-			r.nodeId = nodeId
-		case RelationKind:
-			err := parseRelation(r.r, length, &r.relation, r.refIds)
-			if err != nil {
-				r.err = err
-				return false
-			}
-		case BBoxKind:
-			bb, err := parseBoundingBox(r.r)
-			if err != nil {
-				r.err = err
-				return false
-			}
-			r.boundingBox = &bb
-		default:
-			r.err = fmt.Errorf("unsupported dataset: %x", kind)
-			return false
 		}
 		end := r.r.Offset()
 		if (end - start) != length {
