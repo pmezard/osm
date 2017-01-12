@@ -386,10 +386,39 @@ func patchRings(rel *Relation, rings []*Linestring) []*Linestring {
 	return rings
 }
 
-func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
-	if isCollection(rel) || isMultilineString(rel) {
+func buildSpecialRelations(rel *Relation, db *WaysDb) (*RelationJson, error) {
+	if rel.Id != 11980 {
 		return nil, nil
 	}
+	// France (11980)
+	// The main France relation is build from subrelations with "subarea" role.
+	// Usually subareas are ignored but in this case we want to build the
+	// geometry from them.
+	geoms := []*geos.Geometry{}
+	for _, ref := range rel.Refs {
+		if ref.Type != 2 || ref.Role != "subarea" {
+			continue
+		}
+		sub, err := db.GetRelation(ref.Id)
+		if err != nil {
+			return nil, fmt.Errorf("could not get subrelation %d: %s", ref.Id, err)
+		}
+		if sub == nil {
+			// Ignore missing relations to handle non-planet files
+			continue
+		}
+		fmt.Printf("Processing subrelation %s(%d)\n", sub.Name(), sub.Id)
+		parts, err := buildRelationPolygons(sub, db)
+		if err != nil {
+			return nil, fmt.Errorf("cannot build subrelation %s(%d): %s",
+				sub.Name, sub.Id, err)
+		}
+		geoms = append(geoms, parts...)
+	}
+	return makeJsonRelation(rel, geoms)
+}
+
+func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) {
 	// Collect way and relation ids and sort them
 	wayIds, relIds, err := collectWayRefs(rel)
 	if err != nil {
@@ -405,7 +434,18 @@ func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	}
 	rings = append(rings, subRings...)
 	rings = patchRings(rel, rings)
-	polygons, err := buildGeometry(rings)
+	return buildGeometry(rings)
+}
+
+func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
+	js, err := buildSpecialRelations(rel, db)
+	if js != nil || err != nil {
+		return js, err
+	}
+	if isCollection(rel) || isMultilineString(rel) {
+		return nil, nil
+	}
+	polygons, err := buildRelationPolygons(rel, db)
 	if err != nil {
 		return nil, err
 	}

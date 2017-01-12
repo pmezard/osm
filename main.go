@@ -260,10 +260,10 @@ func indexRelations(r *O5MReader, db *WaysDb) error {
 			if ref.Type != 2 {
 				continue
 			}
-			if ref.Role != "inner" && ref.Role != "outer" {
-				continue
+			if ref.Role == "inner" || ref.Role == "outer" ||
+				rel.Id == 11980 && ref.Role == "subarea" {
+				kept[ref.Id] = true
 			}
-			kept[ref.Id] = true
 		}
 	}
 	if len(resets) != 3 {
@@ -283,7 +283,7 @@ func indexRelations(r *O5MReader, db *WaysDb) error {
 		if !kept[rel.Id] {
 			continue
 		}
-		fmt.Println("indexing", rel.Name())
+		fmt.Println("indexing", rel.Id, rel.Name())
 		err := db.PutRelation(rel)
 		if err != nil {
 			return err
