@@ -187,6 +187,29 @@ func geojsonFn() error {
 	return nil
 }
 
+func indexWays(r *O5MReader, nodes NodePoints, db *WaysDb) error {
+	i := 0
+	for r.Next() {
+		if r.Kind() != WayKind {
+			continue
+		}
+		w := r.Way()
+		ring, err := buildLinestring(w, nodes)
+		if err != nil {
+			return err
+		}
+		err = db.Put(ring)
+		if err != nil {
+			return err
+		}
+		i++
+		if (i % 100) == 0 {
+			fmt.Println("indexed", i)
+		}
+	}
+	return r.Err()
+}
+
 var (
 	indexWaysCmd = app.Command("indexways", "index ways in k/v store")
 	indexWaysO5m = indexWaysCmd.Arg("o5mPath", "o5m file path").Required().String()
@@ -214,6 +237,64 @@ func indexWaysFn() error {
 		return err
 	}
 	return indexWays(r, nodes, db)
+}
+
+func indexRelations(r *O5MReader, db *WaysDb) error {
+	// List relations to collect
+	fmt.Println("listing relations to collect")
+	kept := map[int64]bool{}
+	resets := []ResetPoint{}
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			if r.Kind() == ResetKind {
+				resets = append(resets, r.ResetPoint())
+			}
+			continue
+		}
+		rel := r.Relation()
+		if isMultilineString(rel) {
+			kept[rel.Id] = true
+			continue
+		}
+		for _, ref := range rel.Refs {
+			if ref.Type != 2 {
+				continue
+			}
+			if ref.Role != "inner" && ref.Role != "outer" {
+				continue
+			}
+			kept[ref.Id] = true
+		}
+	}
+	if len(resets) != 3 {
+		return fmt.Errorf("could not collect reset points")
+	}
+	fmt.Println("collecting")
+	err := r.Seek(resets[2])
+	if err != nil {
+		return err
+	}
+	i := 0
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		if !kept[rel.Id] {
+			continue
+		}
+		fmt.Println("indexing", rel.Name())
+		err := db.PutRelation(rel)
+		if err != nil {
+			return err
+		}
+		i++
+		if (i % 100) == 0 {
+			fmt.Println("indexed", i)
+		}
+	}
+	fmt.Println("indexed", i)
+	return r.Err()
 }
 
 var (
