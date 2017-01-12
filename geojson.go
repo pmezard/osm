@@ -219,17 +219,13 @@ type RelationJson struct {
 	Tags     []StringPair `json:"tags"`
 }
 
-func makeJsonRelation(rel *Relation, polygons []*geos.Geometry) (*RelationJson, error) {
-	if len(polygons) == 0 {
+func makeJsonRelation(rel *Relation, loc *Location) (*RelationJson, error) {
+	if loc == nil || len(loc.Coordinates) <= 0 {
 		return nil, fmt.Errorf("empty relation")
-	}
-	location, err := polygonsToJson(polygons)
-	if err != nil {
-		return nil, err
 	}
 	r := &RelationJson{
 		Id:       strconv.Itoa(int(rel.Id)),
-		Location: *location,
+		Location: *loc,
 	}
 	for _, tag := range rel.Tags {
 		if tag.Key == "name" {
@@ -348,7 +344,7 @@ func collectRelationWays(relIds []Ref, db *WaysDb) ([]*Linestring, error) {
 
 func getTag(rel *Relation, key string) string {
 	for _, tag := range rel.Tags {
-		if tag.Key == "type" {
+		if tag.Key == key {
 			return tag.Value
 		}
 	}
@@ -386,7 +382,7 @@ func patchRings(rel *Relation, rings []*Linestring) []*Linestring {
 	return rings
 }
 
-func buildSpecialRelations(rel *Relation, db *WaysDb) (*RelationJson, error) {
+func buildSpecialRelations(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) {
 	if rel.Id != 11980 {
 		return nil, nil
 	}
@@ -415,7 +411,7 @@ func buildSpecialRelations(rel *Relation, db *WaysDb) (*RelationJson, error) {
 		}
 		geoms = append(geoms, parts...)
 	}
-	return makeJsonRelation(rel, geoms)
+	return geoms, nil
 }
 
 func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) {
@@ -437,17 +433,43 @@ func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 	return buildGeometry(rings)
 }
 
-func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
-	js, err := buildSpecialRelations(rel, db)
-	if js != nil || err != nil {
-		return js, err
-	}
-	if isCollection(rel) || isMultilineString(rel) {
-		return nil, nil
-	}
-	polygons, err := buildRelationPolygons(rel, db)
+func ignoreRelation(rel *Relation) bool {
+	return isCollection(rel) ||
+		isMultilineString(rel) ||
+		getTag(rel, "admin_level") == ""
+}
+
+func buildLocation(rel *Relation, ways, locations *WaysDb) (*Location, error) {
+	polygons, err := buildSpecialRelations(rel, ways)
 	if err != nil {
 		return nil, err
 	}
-	return makeJsonRelation(rel, polygons)
+	if polygons == nil {
+		if ignoreRelation(rel) {
+			return nil, nil
+		}
+		polygons, err = buildRelationPolygons(rel, ways)
+		if err != nil {
+			return nil, err
+		}
+	}
+	loc, err := polygonsToJson(polygons)
+	if loc != nil {
+		err = locations.PutLocation(rel.Id, loc)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return loc, nil
+}
+
+func buildRelation(rel *Relation, locations *WaysDb) (*RelationJson, error) {
+	loc, err := locations.GetLocation(rel.Id)
+	if err != nil {
+		return nil, err
+	}
+	if loc == nil {
+		return nil, nil
+	}
+	return makeJsonRelation(rel, loc)
 }

@@ -52,65 +52,41 @@ func countFn() error {
 }
 
 var (
-	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
-	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
-	geojsonDb      = geojsonCmd.Arg("waysdb", "ways db path").Required().String()
-	geojsonOutpath = geojsonCmd.Arg("outpath", "jsonl output path").Required().String()
-	geojsonId      = geojsonCmd.Flag("id", "relation id").String()
-	geojsonWorkers = geojsonCmd.Flag("workers", "workers count").Default("1").Int()
+	locationsCmd     = app.Command("locations", "convert o5m to geojson")
+	locationsPath    = locationsCmd.Arg("path", "o5m file path").Required().String()
+	locationsWays    = locationsCmd.Arg("ways", "ways db path").Required().String()
+	locationsDb      = locationsCmd.Arg("db", "output locations db path").Required().String()
+	locationsId      = locationsCmd.Flag("id", "relation id").String()
+	locationsWorkers = locationsCmd.Flag("workers", "workers count").Default("1").Int()
 )
 
-type ESDoc struct {
-	Id     string        `json:"_id"`
-	Type   string        `json:"_type"`
-	Source *RelationJson `json:"_source"`
-}
-
-func processRelation(db *WaysDb, rel *Relation) (string, error) {
-	js, err := buildRelation(rel, db)
-	if err != nil {
-		return "", err
-	}
-	if js == nil {
-		return "", nil
-	}
-	doc := ESDoc{
-		Id:     js.Id,
-		Type:   "boundary",
-		Source: js,
-	}
-	data, err := json.Marshal(&doc)
-	return string(data), err
-}
-
-func geojsonFn() error {
+func locationsFn() error {
 	start := time.Now()
-	workers := *geojsonWorkers
-	r, err := NewO5MReader(*geojsonPath, NodeKind, WayKind)
+	workers := *locationsWorkers
+	r, err := NewO5MReader(*locationsPath, NodeKind, WayKind)
 	if err != nil {
 		return err
 	}
-	db, err := OpenWaysDb(*geojsonDb)
+	ways, err := OpenWaysDb(*locationsWays)
 	if err != nil {
 		return err
 	}
-	outFp, err := os.Create(*geojsonOutpath)
-	if err != nil {
-		return err
-	}
-	defer outFp.Close()
-
 	relId := int64(-1)
-	if *geojsonId != "" {
-		relId, err = strconv.ParseInt(*geojsonId, 10, 64)
+	if *locationsId != "" {
+		relId, err = strconv.ParseInt(*locationsId, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid relation identifier: %s", err)
 		}
 	}
+	locations, err := OpenWaysDb(*locationsDb)
+	if err != nil {
+		return err
+	}
+	defer locations.Close()
 
 	type Request struct {
 		Relation *Relation
-		Output   string
+		Location *Location
 		Err      error
 	}
 	pendings := make(chan Request)
@@ -122,11 +98,11 @@ func geojsonFn() error {
 		go func() {
 			defer running.Done()
 			for rq := range pendings {
-				data, err := processRelation(db, rq.Relation)
+				loc, err := buildLocation(rq.Relation, ways, locations)
 				if err != nil {
 					rq.Err = err
 				} else {
-					rq.Output = data
+					rq.Location = loc
 				}
 				results <- rq
 			}
@@ -149,10 +125,9 @@ func geojsonFn() error {
 				fmt.Printf("ERROR %d %s: %s\n", rel.Id, rel.Name(), rq.Err)
 				continue
 			}
-			if rq.Output == "" {
+			if rq.Location == nil {
 				continue
 			}
-			fmt.Fprintln(outFp, rq.Output)
 			converted++
 		}
 		close(done)
@@ -184,6 +159,70 @@ func geojsonFn() error {
 	end := time.Now()
 	duration := (end.Sub(start) / time.Second)
 	fmt.Printf("written: %d/%d in %ds\n", converted, seen, duration)
+	return nil
+}
+
+var (
+	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
+	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
+	geojsonLoc     = geojsonCmd.Arg("locations", "locations db path").Required().String()
+	geojsonOutpath = geojsonCmd.Arg("outpath", "jsonl output path").Required().String()
+)
+
+func geojsonFn() error {
+	type ESDoc struct {
+		Id     string        `json:"_id"`
+		Type   string        `json:"_type"`
+		Source *RelationJson `json:"_source"`
+	}
+
+	start := time.Now()
+	r, err := NewO5MReader(*geojsonPath, NodeKind, WayKind)
+	if err != nil {
+		return err
+	}
+	locations, err := OpenWaysDb(*geojsonLoc)
+	if err != nil {
+		return err
+	}
+	outFp, err := os.Create(*geojsonOutpath)
+	if err != nil {
+		return err
+	}
+	defer outFp.Close()
+
+	seen := 0
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		js, err := buildRelation(rel, locations)
+		if err != nil {
+			fmt.Printf("ERROR: %s(%d): %s\n", rel.Name(), rel.Id, err)
+			continue
+		}
+		if js == nil {
+			continue
+		}
+		doc := ESDoc{
+			Id:     js.Id,
+			Type:   "boundary",
+			Source: js,
+		}
+		data, err := json.Marshal(&doc)
+		fmt.Fprintln(outFp, string(data))
+		seen++
+		if seen%1000 == 0 {
+			fmt.Println("converted", seen)
+		}
+	}
+	if r.Err() != nil {
+		return r.Err()
+	}
+	end := time.Now()
+	duration := (end.Sub(start) / time.Second)
+	fmt.Printf("written: %d in %ds\n", seen, duration)
 	return nil
 }
 
@@ -330,6 +369,8 @@ func dispatch() error {
 		return indexWaysFn()
 	case indexRelationsCmd.FullCommand():
 		return indexRelationsFn()
+	case locationsCmd.FullCommand():
+		return locationsFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }

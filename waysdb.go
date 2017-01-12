@@ -10,6 +10,7 @@ import (
 var (
 	waysBucket      = []byte("ways")
 	relationsBucket = []byte("relations")
+	locationsBucket = []byte("locations")
 )
 
 type WaysDb struct {
@@ -27,7 +28,7 @@ func OpenWaysDb(path string) (*WaysDb, error) {
 		}
 	}()
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range [][]byte{waysBucket, relationsBucket} {
+		for _, name := range [][]byte{waysBucket, relationsBucket, locationsBucket} {
 			_, err := tx.CreateBucketIfNotExists(name)
 			if err != nil {
 				return err
@@ -107,4 +108,17 @@ func (db *WaysDb) GetRelation(id int64) (*Relation, error) {
 		r = nil
 	}
 	return r, err
+}
+
+func (db *WaysDb) PutLocation(id int64, doc *Location) error {
+	return db.putJson(locationsBucket, id, doc)
+}
+
+func (db *WaysDb) GetLocation(id int64) (*Location, error) {
+	doc := &Location{}
+	ok, err := db.getJson(locationsBucket, id, doc)
+	if !ok {
+		doc = nil
+	}
+	return doc, err
 }
