@@ -213,14 +213,23 @@ func polygonsToJson(polygons []*geos.Geometry) (*Location, error) {
 }
 
 type RelationJson struct {
-	Id         string       `json:"id"`
-	Name       string       `json:"name"`
-	AdminLevel int          `json:"admin_level"`
-	Location   Location     `json:"shape"`
-	Tags       []StringPair `json:"tags"`
+	Id         string `json:"id"`
+	Name       string `json:"name"`
+	AdminLevel int    `json:"admin_level"`
+	Center     struct {
+		Lon float64 `json:"lon"`
+		Lat float64 `json:"lat"`
+	} `json:"center"`
+	Location Location     `json:"shape"`
+	Tags     []StringPair `json:"tags"`
 }
 
-func makeJsonRelation(rel *Relation, loc *Location) (*RelationJson, error) {
+func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
+	*RelationJson, error) {
+
+	if center == nil {
+		return nil, fmt.Errorf("no center")
+	}
 	if loc == nil || len(loc.Coordinates) <= 0 {
 		return nil, fmt.Errorf("empty relation")
 	}
@@ -228,6 +237,8 @@ func makeJsonRelation(rel *Relation, loc *Location) (*RelationJson, error) {
 		Id:       strconv.Itoa(int(rel.Id)),
 		Location: *loc,
 	}
+	r.Center.Lon = float64(center.Lon) / 1e7
+	r.Center.Lat = float64(center.Lat) / 1e7
 	for _, tag := range rel.Tags {
 		if tag.Key == "name" {
 			r.Name = tag.Value
@@ -447,28 +458,31 @@ func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 }
 
 func ignoreRelation(rel *Relation) bool {
+	if rel.Id == 11980 {
+		return false
+	}
 	return isCollection(rel) ||
 		isMultilineString(rel) ||
 		getTag(rel, "admin_level") == ""
 }
 
-func buildLocation(rel *Relation, ways, locations *WaysDb) (*Location, error) {
-	polygons, err := buildSpecialRelations(rel, ways)
+func buildLocation(rel *Relation, db *WaysDb) (*Location, error) {
+	if ignoreRelation(rel) {
+		return nil, nil
+	}
+	polygons, err := buildSpecialRelations(rel, db)
 	if err != nil {
 		return nil, err
 	}
 	if polygons == nil {
-		if ignoreRelation(rel) {
-			return nil, nil
-		}
-		polygons, err = buildRelationPolygons(rel, ways)
+		polygons, err = buildRelationPolygons(rel, db)
 		if err != nil {
 			return nil, err
 		}
 	}
 	loc, err := polygonsToJson(polygons)
 	if loc != nil {
-		err = locations.PutLocation(rel.Id, loc)
+		err = db.PutLocation(rel.Id, loc)
 		if err != nil {
 			return nil, err
 		}
@@ -476,13 +490,22 @@ func buildLocation(rel *Relation, ways, locations *WaysDb) (*Location, error) {
 	return loc, nil
 }
 
-func buildRelation(rel *Relation, locations *WaysDb) (*RelationJson, error) {
-	loc, err := locations.GetLocation(rel.Id)
+func buildRelation(rel *Relation, db *WaysDb) (
+	*RelationJson, error) {
+
+	loc, err := db.GetLocation(rel.Id)
 	if err != nil {
 		return nil, err
 	}
 	if loc == nil {
 		return nil, nil
 	}
-	return makeJsonRelation(rel, loc)
+	center, err := db.GetNode(rel.Id)
+	if err != nil {
+		return nil, err
+	}
+	if center == nil {
+		return nil, nil
+	}
+	return makeJsonRelation(rel, center, loc)
 }

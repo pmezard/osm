@@ -286,11 +286,11 @@ type Metadata struct {
 }
 
 type Node struct {
-	Id   int64
-	Meta Metadata
-	Lon  int64
-	Lat  int64
-	Tags []StringPair
+	Id   int64        `json:"id"`
+	Meta Metadata     `json:"meta"`
+	Lon  int64        `json:"lon"`
+	Lat  int64        `json:"lat"`
+	Tags []StringPair `json:"tags"`
 }
 
 func parseMeta(r *baseReader, prev *Metadata) {

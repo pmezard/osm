@@ -54,7 +54,6 @@ func countFn() error {
 var (
 	locationsCmd     = app.Command("locations", "convert o5m to geojson")
 	locationsPath    = locationsCmd.Arg("path", "o5m file path").Required().String()
-	locationsWays    = locationsCmd.Arg("ways", "ways db path").Required().String()
 	locationsDb      = locationsCmd.Arg("db", "output locations db path").Required().String()
 	locationsId      = locationsCmd.Flag("id", "relation id").String()
 	locationsWorkers = locationsCmd.Flag("workers", "workers count").Default("1").Int()
@@ -67,10 +66,12 @@ func locationsFn() error {
 	if err != nil {
 		return err
 	}
-	ways, err := OpenWaysDb(*locationsWays)
+	db, err := OpenWaysDb(*locationsDb)
 	if err != nil {
 		return err
 	}
+	defer db.Close()
+
 	relId := int64(-1)
 	if *locationsId != "" {
 		relId, err = strconv.ParseInt(*locationsId, 10, 64)
@@ -78,12 +79,6 @@ func locationsFn() error {
 			return fmt.Errorf("invalid relation identifier: %s", err)
 		}
 	}
-	locations, err := OpenWaysDb(*locationsDb)
-	if err != nil {
-		return err
-	}
-	defer locations.Close()
-
 	type Request struct {
 		Relation *Relation
 		Location *Location
@@ -98,7 +93,7 @@ func locationsFn() error {
 		go func() {
 			defer running.Done()
 			for rq := range pendings {
-				loc, err := buildLocation(rq.Relation, ways, locations)
+				loc, err := buildLocation(rq.Relation, db)
 				if err != nil {
 					rq.Err = err
 				} else {
@@ -165,7 +160,7 @@ func locationsFn() error {
 var (
 	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
 	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
-	geojsonLoc     = geojsonCmd.Arg("locations", "locations db path").Required().String()
+	geojsonDb      = geojsonCmd.Arg("db", "db path").Required().String()
 	geojsonOutpath = geojsonCmd.Arg("outpath", "jsonl output path").Required().String()
 )
 
@@ -181,7 +176,7 @@ func geojsonFn() error {
 	if err != nil {
 		return err
 	}
-	locations, err := OpenWaysDb(*geojsonLoc)
+	db, err := OpenWaysDb(*geojsonDb)
 	if err != nil {
 		return err
 	}
@@ -197,7 +192,7 @@ func geojsonFn() error {
 			continue
 		}
 		rel := r.Relation()
-		js, err := buildRelation(rel, locations)
+		js, err := buildRelation(rel, db)
 		if err != nil {
 			fmt.Printf("ERROR: %s(%d): %s\n", rel.Name(), rel.Id, err)
 			continue
@@ -358,6 +353,84 @@ func indexRelationsFn() error {
 	return indexRelations(r, db)
 }
 
+var (
+	indexCentersCmd = app.Command("indexcenters", "index relations admin_center")
+	indexCentersO5m = indexCentersCmd.Arg("o5mPath", "o5m file path").
+			Required().String()
+	indexCentersDb = indexCentersCmd.Arg("db", "locations db path").
+			Required().String()
+)
+
+func indexCentersFn() error {
+	// Collect admin_center nodes
+	db, err := OpenWaysDb(*indexCentersDb)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	nodeIds := map[int64][]int64{}
+	r, err := NewO5MReader(*indexCentersO5m, NodeKind, WayKind)
+	if err != nil {
+		return err
+	}
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		if ignoreRelation(rel) {
+			continue
+		}
+		loc, err := db.GetLocation(rel.Id)
+		if err != nil {
+			return err
+		}
+		if loc == nil || len(loc.Coordinates) == 0 {
+			continue
+		}
+		centerId := int64(-1)
+		for _, ref := range rel.Refs {
+			if ref.Type == 0 && (ref.Role == "admin_center" || ref.Role == "admin_centre") {
+				centerId = ref.Id
+			}
+		}
+		if centerId < 0 {
+			level := getTag(rel, "admin_level")
+			fmt.Printf("cannot get admin_center: %s(%d)[level=%s]\n",
+				rel.Name(), rel.Id, level)
+			continue
+		}
+		nodeIds[centerId] = append(nodeIds[centerId], rel.Id)
+	}
+	if r.Err() != nil {
+		return r.Err()
+	}
+
+	r, err = NewO5MReader(*indexCentersO5m)
+	if err != nil {
+		return err
+	}
+	seenNode := false
+	for r.Next() {
+		if r.Kind() != NodeKind {
+			if seenNode && r.Kind() == ResetKind {
+				break
+			}
+			continue
+		}
+		seenNode = true
+		n := r.Node()
+		relIds := nodeIds[n.Id]
+		for _, relId := range relIds {
+			err = db.PutNode(relId, n)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func dispatch() error {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	switch cmd {
@@ -371,6 +444,8 @@ func dispatch() error {
 		return indexRelationsFn()
 	case locationsCmd.FullCommand():
 		return locationsFn()
+	case indexCentersCmd.FullCommand():
+		return indexCentersFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
