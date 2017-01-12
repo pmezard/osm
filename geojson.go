@@ -363,6 +363,29 @@ func isCollection(rel *Relation) bool {
 	return getTag(rel, "type") == "collection"
 }
 
+func patchRings(rel *Relation, rings []*Linestring) []*Linestring {
+	if rel.Id != 1362232 {
+		return rings
+	}
+	// Metropolitan France polygon is not closed
+	rings = append(rings,
+		&Linestring{
+			Id: 0,
+			Points: []Point{
+				{-17641958, 433431448},
+				{-17668244, 433425557},
+			},
+		},
+		&Linestring{
+			Id: 1,
+			Points: []Point{
+				{37501395, 434237009},
+				{37469067, 434193643},
+			},
+		})
+	return rings
+}
+
 func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 	if isCollection(rel) || isMultilineString(rel) {
 		return nil, nil
@@ -381,6 +404,7 @@ func buildRelation(rel *Relation, db *WaysDb) (*RelationJson, error) {
 		return nil, err
 	}
 	rings = append(rings, subRings...)
+	rings = patchRings(rel, rings)
 	polygons, err := buildGeometry(rings)
 	if err != nil {
 		return nil, err
