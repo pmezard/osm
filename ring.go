@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/paulsmith/gogeos/geos"
+	"github.com/pmezard/gogeos/geos"
 )
 
 type Linestring struct {

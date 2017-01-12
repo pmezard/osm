@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/paulsmith/gogeos/geos"
+	"github.com/pmezard/gogeos/geos"
 )
 
 // Returns the inclusion matrix where h[i][j] is true if rings[i] contains

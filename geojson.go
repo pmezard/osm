@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/paulsmith/gogeos/geos"
+	"github.com/pmezard/gogeos/geos"
 )
 
 type Point struct {

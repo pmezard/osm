@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/paulsmith/gogeos/geos"
+	"github.com/pmezard/gogeos/geos"
 )
 
 func makeGeosPolygons(rings []*Linestring) []*geos.Geometry {
