@@ -213,10 +213,11 @@ func polygonsToJson(polygons []*geos.Geometry) (*Location, error) {
 }
 
 type RelationJson struct {
-	Id       string       `json:"id"`
-	Name     string       `json:"name"`
-	Location Location     `json:"shape"`
-	Tags     []StringPair `json:"tags"`
+	Id         string       `json:"id"`
+	Name       string       `json:"name"`
+	AdminLevel int          `json:"admin_level"`
+	Location   Location     `json:"shape"`
+	Tags       []StringPair `json:"tags"`
 }
 
 func makeJsonRelation(rel *Relation, loc *Location) (*RelationJson, error) {
@@ -230,6 +231,18 @@ func makeJsonRelation(rel *Relation, loc *Location) (*RelationJson, error) {
 	for _, tag := range rel.Tags {
 		if tag.Key == "name" {
 			r.Name = tag.Value
+		} else if tag.Key == "admin_level" {
+			level, err := strconv.ParseUint(tag.Value, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse admin_level: %s", tag.Value)
+			}
+			if r.AdminLevel != 0 {
+				return nil, fmt.Errorf("more than one admin level")
+			}
+			if level < 1 || level > 11 {
+				return nil, fmt.Errorf("unexpected admin_level: %d", level)
+			}
+			r.AdminLevel = int(level)
 		}
 		r.Tags = append(r.Tags, tag)
 	}
