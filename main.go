@@ -142,11 +142,11 @@ func geojsonFn() error {
 		for rq := range results {
 			seen++
 			if seen%100 == 0 {
-				fmt.Fprintf(os.Stderr, "converted %d/%d\n", converted, seen)
+				fmt.Printf("converted %d/%d\n", converted, seen)
 			}
 			rel := rq.Relation
 			if rq.Err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR %d %s: %s\n", rel.Id, rel.Name(), rq.Err)
+				fmt.Printf("ERROR %d %s: %s\n", rel.Id, rel.Name(), rq.Err)
 				continue
 			}
 			if rq.Output == "" {
@@ -183,7 +183,7 @@ func geojsonFn() error {
 	<-done
 	end := time.Now()
 	duration := (end.Sub(start) / time.Second)
-	fmt.Fprintf(os.Stderr, "written: %d/%d in %ds\n", converted, seen, duration)
+	fmt.Printf("written: %d/%d in %ds\n", converted, seen, duration)
 	return nil
 }
 
