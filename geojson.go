@@ -213,10 +213,12 @@ func polygonsToJson(polygons []*geos.Geometry) (*Location, error) {
 }
 
 type RelationJson struct {
-	Id         string `json:"id"`
-	Name       string `json:"name"`
-	AdminLevel int    `json:"admin_level"`
-	Center     struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	AdminLevel  int    `json:"admin_level"`
+	CountryIso2 string `json:"country_iso2,omitempty"`
+	CountryIso3 string `json:"country_iso3,omitempty"`
+	Center      struct {
 		Lon float64 `json:"lon"`
 		Lat float64 `json:"lat"`
 	} `json:"center"`
@@ -254,6 +256,10 @@ func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
 				return nil, fmt.Errorf("unexpected admin_level: %d", level)
 			}
 			r.AdminLevel = int(level)
+		} else if tag.Key == "ISO3166-1" {
+			r.CountryIso2 = tag.Value
+		} else if tag.Key == "ISO3166-1:alpha3" {
+			r.CountryIso3 = tag.Value
 		}
 		r.Tags = append(r.Tags, tag)
 	}
