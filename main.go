@@ -162,6 +162,7 @@ var (
 	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
 	geojsonDb      = geojsonCmd.Arg("db", "db path").Required().String()
 	geojsonOutpath = geojsonCmd.Arg("outpath", "jsonl output path").Required().String()
+	geojsonId      = geojsonCmd.Flag("id", "relation id").String()
 )
 
 func geojsonFn() error {
@@ -169,6 +170,14 @@ func geojsonFn() error {
 		Id     string        `json:"_id"`
 		Type   string        `json:"_type"`
 		Source *RelationJson `json:"_source"`
+	}
+	relId := int64(-1)
+	if *geojsonId != "" {
+		id, err := strconv.ParseUint(*geojsonId, 10, 64)
+		if err != nil {
+			return err
+		}
+		relId = int64(id)
 	}
 
 	start := time.Now()
@@ -187,11 +196,18 @@ func geojsonFn() error {
 	defer outFp.Close()
 
 	seen := 0
-	for r.Next() {
+	stop := false
+	for r.Next() && !stop {
 		if r.Kind() != RelationKind {
 			continue
 		}
 		rel := r.Relation()
+		if relId > 0 {
+			if relId != rel.Id {
+				continue
+			}
+			stop = true
+		}
 		js, err := buildRelation(rel, db)
 		if err != nil {
 			fmt.Printf("ERROR: %s(%d): %s\n", rel.Name(), rel.Id, err)
