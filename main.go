@@ -390,6 +390,7 @@ func indexCentersFn() error {
 		return err
 	}
 	polygons := 0
+	indexed := 0
 	for r.Next() {
 		if r.Kind() != RelationKind {
 			continue
@@ -412,13 +413,33 @@ func indexCentersFn() error {
 				centerId = ref.Id
 			}
 		}
-		if centerId < 0 {
+		if centerId >= 0 {
+			nodeIds[centerId] = append(nodeIds[centerId], rel.Id)
+			continue
+		}
+		c, err := computeCentroid(loc)
+		if err != nil {
+			level := getTag(rel, "admin_level")
+			fmt.Printf("cannot compute centroid: %s(%d)[level=%s]: %s\n",
+				rel.Name(), rel.Id, level, err)
+			continue
+		}
+		if c != nil {
+			/*
+				level := getTag(rel, "admin_level")
+					fmt.Printf("CENTROID %s(%d)[level=%s]: %f,%f\n", rel.Name(), rel.Id, level,
+						c.Lon, c.Lat)
+			*/
+			indexed++
+			err = db.PutCentroid(rel.Id, c)
+			if err != nil {
+				return err
+			}
+		} else {
 			level := getTag(rel, "admin_level")
 			fmt.Printf("cannot get admin_center: %s(%d)[level=%s]\n",
 				rel.Name(), rel.Id, level)
-			continue
 		}
-		nodeIds[centerId] = append(nodeIds[centerId], rel.Id)
 	}
 	if r.Err() != nil {
 		return r.Err()
@@ -428,7 +449,6 @@ func indexCentersFn() error {
 	if err != nil {
 		return err
 	}
-	indexed := 0
 	seenNode := false
 	for r.Next() {
 		if r.Kind() != NodeKind {
