@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/pmezard/gogeos/geos"
 )
@@ -226,6 +227,23 @@ type RelationJson struct {
 	Tags     []StringPair `json:"tags"`
 }
 
+func getRelationName(rel *Relation) string {
+	name := ""
+	for _, tag := range rel.Tags {
+		if tag.Key == "name" {
+			name = tag.Value
+			break
+		}
+	}
+	pos := strings.Index(name, "(")
+	if pos >= 0 {
+		// "France (terres)"
+		name = name[:pos]
+	}
+	name = strings.TrimSpace(name)
+	return name
+}
+
 func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
 	*RelationJson, error) {
 
@@ -242,9 +260,7 @@ func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
 	r.Center.Lon = float64(center.Lon) / 1e7
 	r.Center.Lat = float64(center.Lat) / 1e7
 	for _, tag := range rel.Tags {
-		if tag.Key == "name" {
-			r.Name = tag.Value
-		} else if tag.Key == "admin_level" {
+		if tag.Key == "admin_level" {
 			level, err := strconv.ParseUint(tag.Value, 10, 32)
 			if err != nil {
 				return nil, fmt.Errorf("cannot parse admin_level: %s", tag.Value)
@@ -263,6 +279,7 @@ func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
 		}
 		r.Tags = append(r.Tags, tag)
 	}
+	r.Name = getRelationName(rel)
 	return r, nil
 }
 
