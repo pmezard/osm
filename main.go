@@ -389,6 +389,7 @@ func indexCentersFn() error {
 	if err != nil {
 		return err
 	}
+	polygons := 0
 	for r.Next() {
 		if r.Kind() != RelationKind {
 			continue
@@ -401,6 +402,7 @@ func indexCentersFn() error {
 		if err != nil {
 			return err
 		}
+		polygons++
 		if loc == nil || len(loc.Coordinates) == 0 {
 			continue
 		}
@@ -426,6 +428,7 @@ func indexCentersFn() error {
 	if err != nil {
 		return err
 	}
+	indexed := 0
 	seenNode := false
 	for r.Next() {
 		if r.Kind() != NodeKind {
@@ -436,14 +439,21 @@ func indexCentersFn() error {
 		}
 		seenNode = true
 		n := r.Node()
+		c := &Centroid{
+			NodeId: n.Id,
+			Lon:    float64(n.Lon) / 1e7,
+			Lat:    float64(n.Lat) / 1e7,
+		}
 		relIds := nodeIds[n.Id]
 		for _, relId := range relIds {
-			err = db.PutNode(relId, n)
+			err = db.PutCentroid(relId, c)
 			if err != nil {
 				return err
 			}
+			indexed++
 		}
 	}
+	fmt.Printf("indexed: %d/%d\n", indexed, polygons)
 	return nil
 }
 

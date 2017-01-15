@@ -244,7 +244,7 @@ func getRelationName(rel *Relation) string {
 	return name
 }
 
-func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
+func makeJsonRelation(rel *Relation, center *Centroid, loc *Location) (
 	*RelationJson, error) {
 
 	if center == nil {
@@ -257,8 +257,8 @@ func makeJsonRelation(rel *Relation, center *Node, loc *Location) (
 		Id:       strconv.Itoa(int(rel.Id)),
 		Location: *loc,
 	}
-	r.Center.Lon = float64(center.Lon) / 1e7
-	r.Center.Lat = float64(center.Lat) / 1e7
+	r.Center.Lon = center.Lon
+	r.Center.Lat = center.Lat
 	for _, tag := range rel.Tags {
 		if tag.Key == "admin_level" {
 			level, err := strconv.ParseUint(tag.Value, 10, 32)
@@ -523,7 +523,7 @@ func buildRelation(rel *Relation, db *WaysDb) (
 	if loc == nil {
 		return nil, nil
 	}
-	center, err := db.GetNode(rel.Id)
+	center, err := db.GetCentroid(rel.Id)
 	if err != nil {
 		return nil, err
 	}

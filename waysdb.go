@@ -12,6 +12,7 @@ var (
 	relationsBucket = []byte("relations")
 	locationsBucket = []byte("locations")
 	nodesBucket     = []byte("nodes")
+	centroidsBucket = []byte("centroids")
 )
 
 type WaysDb struct {
@@ -34,6 +35,7 @@ func OpenWaysDb(path string) (*WaysDb, error) {
 			relationsBucket,
 			locationsBucket,
 			nodesBucket,
+			centroidsBucket,
 		}
 		for _, name := range names {
 			_, err := tx.CreateBucketIfNotExists(name)
@@ -137,6 +139,19 @@ func (db *WaysDb) PutNode(id int64, doc *Node) error {
 func (db *WaysDb) GetNode(id int64) (*Node, error) {
 	doc := &Node{}
 	ok, err := db.getJson(nodesBucket, id, doc)
+	if !ok {
+		doc = nil
+	}
+	return doc, err
+}
+
+func (db *WaysDb) PutCentroid(id int64, doc *Centroid) error {
+	return db.putJson(centroidsBucket, id, doc)
+}
+
+func (db *WaysDb) GetCentroid(id int64) (*Centroid, error) {
+	doc := &Centroid{}
+	ok, err := db.getJson(centroidsBucket, id, doc)
 	if !ok {
 		doc = nil
 	}
