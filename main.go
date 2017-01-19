@@ -52,7 +52,7 @@ func countFn() error {
 }
 
 var (
-	locationsCmd     = app.Command("locations", "convert o5m to geojson")
+	locationsCmd     = app.Command("indexlocations", "convert o5m to geojson")
 	locationsPath    = locationsCmd.Arg("path", "o5m file path").Required().String()
 	locationsDb      = locationsCmd.Arg("db", "output locations db path").Required().String()
 	locationsId      = locationsCmd.Flag("id", "relation id").String()
