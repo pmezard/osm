@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -477,6 +481,88 @@ func indexCentersFn() error {
 	return nil
 }
 
+var (
+	printNodesCmd = app.Command("printnodes", "print node ids and lat/lng")
+	printNodesO5m = printNodesCmd.Arg("o5mPath", "o5m file path").
+			Required().String()
+)
+
+func formatCoord(c int64) string {
+	s := fmt.Sprintf("%f", float64(c)/1e7)
+	if !strings.ContainsRune(s, '.') {
+		s += ".0"
+	}
+	return s
+}
+
+func printNodesFn() error {
+	r, err := NewO5MReader(*printNodesO5m, WayKind, RelationKind)
+	if err != nil {
+		return err
+	}
+	count := 0
+	resets := 0
+	for r.Next() {
+		if r.Kind() != NodeKind {
+			if r.Kind() == ResetKind {
+				resets++
+				if resets > 1 {
+					break
+				}
+			}
+			continue
+		}
+		n := r.Node()
+		fmt.Printf("%d %s %s\n", n.Id, formatCoord(n.Lat), formatCoord(n.Lon))
+		count++
+	}
+	fmt.Println(count, "nodes")
+	return r.Err()
+}
+
+var (
+	printXmlNodesCmd = app.Command("printxmlnodes",
+		"print node ids and lat/lng from osm file")
+	printXmlNodesPath = printXmlNodesCmd.Arg("osmPath", "osm file path").
+				Required().String()
+)
+
+var (
+	// <node id="135821" lat="45.191733" lon="5.7346073"
+	reNode = regexp.MustCompile(
+		`^\s*<node\s+id="([^"]+)"\s+lat="([^"]+)"\s+lon="([^"]+)"`)
+)
+
+func printXmlNodesFn() error {
+	fp, err := os.Open(*printXmlNodesPath)
+	if err != nil {
+		return err
+	}
+	defer fp.Close()
+
+	count := 0
+	prefix := []byte("<node")
+	scanner := bufio.NewScanner(fp)
+	for scanner.Scan() {
+		data := scanner.Bytes()
+		data = bytes.TrimSpace(data)
+		if !bytes.HasPrefix(data, prefix) {
+			continue
+		}
+		count++
+		m := reNode.FindSubmatch(data)
+		if m == nil {
+			return fmt.Errorf("could not match node line: %s", string(data))
+		}
+		id := string(m[1])
+		lat := string(m[2])
+		lon := string(m[3])
+		fmt.Println(id, lat, lon)
+	}
+	fmt.Println(count, "nodes")
+	return scanner.Err()
+}
+
 func dispatch() error {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	switch cmd {
@@ -492,6 +578,10 @@ func dispatch() error {
 		return locationsFn()
 	case indexCentersCmd.FullCommand():
 		return indexCentersFn()
+	case printNodesCmd.FullCommand():
+		return printNodesFn()
+	case printXmlNodesCmd.FullCommand():
+		return printXmlNodesFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
