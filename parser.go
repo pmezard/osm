@@ -334,8 +334,8 @@ func parseNode(r *baseReader, length int, prev *Node) error {
 	prev.Id += r.ReadSigned()
 	prev.Tags = prev.Tags[:0]
 	parseMeta(r, &prev.Meta)
-	// TODO: implement 32-bit overflow behaviour (see o5m spec on wiki)
-	prev.Lon += r.ReadSigned()
+	// Longitude delta encoding is applied using 32-bit signed arithmetic.
+	prev.Lon = int64(int32(prev.Lon) + int32(r.ReadSigned()))
 	prev.Lat += r.ReadSigned()
 	remaining := length - (r.Offset() - offset)
 	tags, err := parseTags(r, remaining, prev.Tags)
