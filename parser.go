@@ -392,12 +392,15 @@ type Relation struct {
 }
 
 func (r *Relation) Name() string {
-	for _, tag := range r.Tags {
-		if tag.Key == "name" {
-			return tag.Value
-		}
-	}
-	return ""
+	return getTag(r, "name")
+}
+
+func (r *Relation) AdminLevel() string {
+	return getTag(r, "admin_level")
+}
+
+func (r *Relation) String() string {
+	return fmt.Sprintf("%s(%d)[level=%s]", r.Name(), r.Id, r.AdminLevel())
 }
 
 func (r *Relation) Clone() *Relation {

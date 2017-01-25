@@ -575,6 +575,45 @@ func printXmlNodesFn() error {
 	return scanner.Err()
 }
 
+var (
+	recursiveRelCmd = app.Command("recursiverel",
+		"print relations made of other relations")
+	recursiveRelO5m = recursiveRelCmd.Arg("o5mPath", "o5m file path").
+			Required().String()
+)
+
+func recursiveRelFn() error {
+	r, err := NewO5MReader(*recursiveRelO5m, NodeKind, WayKind)
+	if err != nil {
+		return err
+	}
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		if ignoreRelation(rel) {
+			continue
+		}
+		ways := 0
+		relations := 0
+		for _, ref := range rel.Refs {
+			if ref.Type == 1 {
+				ways++
+			} else if ref.Type == 2 {
+				if ref.Role == "outer" || ref.Role == "inner" {
+					relations++
+				}
+			}
+		}
+		if relations == 0 {
+			continue
+		}
+		fmt.Printf("%s ways=%d\n", rel.String(), ways)
+	}
+	return r.Err()
+}
+
 func dispatch() error {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	switch cmd {
@@ -594,6 +633,8 @@ func dispatch() error {
 		return printNodesFn()
 	case printXmlNodesCmd.FullCommand():
 		return printXmlNodesFn()
+	case recursiveRelCmd.FullCommand():
+		return recursiveRelFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
