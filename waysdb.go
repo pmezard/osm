@@ -132,6 +132,17 @@ func (db *WaysDb) GetLocation(id int64) (*Location, error) {
 	return doc, err
 }
 
+func (db *WaysDb) HasLocation(id int64) (bool, error) {
+	ok := false
+	key := makeByteKey(id)
+	err := db.db.View(func(tx *bolt.Tx) error {
+		data := tx.Bucket(locationsBucket).Get(key)
+		ok = data != nil
+		return nil
+	})
+	return ok, err
+}
+
 func (db *WaysDb) PutNode(id int64, doc *Node) error {
 	return db.putJson(nodesBucket, id, doc)
 }

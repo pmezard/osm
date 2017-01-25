@@ -145,6 +145,16 @@ func locationsFn() error {
 				stop = true
 			}
 		}
+		if ignoreRelation(rel) {
+			continue
+		}
+		ok, err := db.HasLocation(rel.Id)
+		if err != nil {
+			return err
+		}
+		if ok {
+			continue
+		}
 		rq := Request{
 			Relation: rel.Clone(),
 		}
