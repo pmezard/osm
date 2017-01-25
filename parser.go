@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 func readSigned(r *bufio.Reader) (int64, int, error) {
@@ -392,7 +393,21 @@ type Relation struct {
 }
 
 func (r *Relation) Name() string {
-	return getTag(r, "name")
+	name := ""
+	names := 0
+	for _, tag := range r.Tags {
+		if tag.Key == "name" {
+			return tag.Value
+		}
+		if strings.HasPrefix(tag.Key, "name:") {
+			names++
+			if names > 1 {
+				return ""
+			}
+			name = tag.Value
+		}
+	}
+	return name
 }
 
 func (r *Relation) AdminLevel() string {

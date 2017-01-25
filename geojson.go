@@ -584,7 +584,8 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	}
 	if isCollection(rel) ||
 		isMultilineString(rel) ||
-		getTag(rel, "admin_level") == "" {
+		getTag(rel, "admin_level") == "" ||
+		rel.Name() == "" {
 		return true, nil
 	}
 	boundary := strings.ToLower(getTag(rel, "boundary"))
