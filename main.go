@@ -121,7 +121,9 @@ func locationsFn() error {
 			}
 			rel := rq.Relation
 			if rq.Err != nil {
-				fmt.Printf("ERROR %d %s: %s\n", rel.Id, rel.Name(), rq.Err)
+				level := getTag(rel, "admin_level")
+				fmt.Printf("ERROR %s(%d)[level=%s]: %s\n", rel.Name(), rel.Id,
+					level, rq.Err)
 				continue
 			}
 			if rq.Location == nil {
