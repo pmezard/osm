@@ -484,6 +484,11 @@ func ignoreRelation(rel *Relation) bool {
 	if rel.Id == 11980 {
 		return false
 	}
+	if rel.Id == 1804307 {
+		// Louisville has a lot of inner relations and I have hard time to
+		// collect the rings at this point.
+		return true
+	}
 	return isCollection(rel) ||
 		isMultilineString(rel) ||
 		getTag(rel, "admin_level") == ""
