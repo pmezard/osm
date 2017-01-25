@@ -168,3 +168,9 @@ func (db *WaysDb) GetCentroid(id int64) (*Centroid, error) {
 	}
 	return doc, err
 }
+
+func (db *WaysDb) DeleteBucket(name string) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		return tx.DeleteBucket([]byte(name))
+	})
+}

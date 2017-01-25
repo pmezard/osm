@@ -614,6 +614,22 @@ func recursiveRelFn() error {
 	return r.Err()
 }
 
+var (
+	resetDbCmd    = app.Command("resetdb", "delete a bucket from feature db")
+	resetDbPath   = resetDbCmd.Arg("dbPath", "db path").Required().String()
+	resetDbBucket = resetDbCmd.Arg("bucket", "name of bucket to delete").Required().String()
+)
+
+func resetDbFn() error {
+	db, err := OpenWaysDb(*resetDbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	return db.DeleteBucket(*resetDbBucket)
+}
+
 func dispatch() error {
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	switch cmd {
@@ -635,6 +651,8 @@ func dispatch() error {
 		return printXmlNodesFn()
 	case recursiveRelCmd.FullCommand():
 		return recursiveRelFn()
+	case resetDbCmd.FullCommand():
+		return resetDbFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
