@@ -461,6 +461,15 @@ func buildSpecialRelations(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 	return geoms, nil
 }
 
+func isRecursiveRelation(rel *Relation) bool {
+	// In general, geometries are only built from the ways contained by the
+	// relation. For historical reasons there seems to be a few exceptions,
+	// where we have to extract the ways recursively from inner and outer
+	// sub-relations.
+	return rel.Id == 1111111 || // Germany
+		rel.Id == 1362232 // France metropolitaine
+}
+
 func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) {
 	// Collect way and relation ids and sort them
 	wayIds, relIds, err := collectWayRefs(rel)
@@ -471,11 +480,13 @@ func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 	if err != nil {
 		return nil, err
 	}
-	subRings, err := collectRelationWays(relIds, db)
-	if err != nil {
-		return nil, err
+	if isRecursiveRelation(rel) {
+		subRings, err := collectRelationWays(relIds, db)
+		if err != nil {
+			return nil, err
+		}
+		rings = append(rings, subRings...)
 	}
-	rings = append(rings, subRings...)
 	rings = patchRings(rel, rings)
 	return buildGeometry(rings)
 }
