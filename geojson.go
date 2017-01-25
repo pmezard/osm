@@ -491,7 +491,9 @@ func ignoreRelation(rel *Relation) bool {
 	}
 	return isCollection(rel) ||
 		isMultilineString(rel) ||
-		getTag(rel, "admin_level") == ""
+		getTag(rel, "admin_level") == "" ||
+		// Ignore things like Province apostolique de Normandie (2713391)
+		getTag(rel, "boundary") == "religious_administration"
 }
 
 func buildLocation(rel *Relation, db *WaysDb) (*Location, error) {
