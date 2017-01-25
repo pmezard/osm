@@ -147,7 +147,10 @@ func locationsFn() error {
 				stop = true
 			}
 		}
-		if ignoreRelation(rel) {
+		if ok, err := ignoreRelation(rel); ok || err != nil {
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		ok, err := db.HasLocation(rel.Id)
@@ -412,7 +415,10 @@ func indexCentersFn() error {
 			continue
 		}
 		rel := r.Relation()
-		if ignoreRelation(rel) {
+		if ok, err := ignoreRelation(rel); ok || err != nil {
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		loc, err := db.GetLocation(rel.Id)
@@ -592,7 +598,10 @@ func recursiveRelFn() error {
 			continue
 		}
 		rel := r.Relation()
-		if ignoreRelation(rel) {
+		if ok, err := ignoreRelation(rel); ok || err != nil {
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		ways := 0

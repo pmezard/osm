@@ -491,25 +491,119 @@ func buildRelationPolygons(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 	return buildGeometry(rings)
 }
 
-func ignoreRelation(rel *Relation) bool {
-	if rel.Id == 11980 {
-		return false
+var (
+	_ACCEPTED_BOUNDARIES = []string{
+		// ACCEPTED
+		"administrative",
+		"administative",
+		"admniistrative",
+		"adminsitrative",
+		"land_area",
+		"landuse",
+		"cdp",
+		"postal_code",
+		"territorial",
+		"suburb",
+		"borough",
+		"neighbourhood",
+		"political",
+		"maritime",
+		"administrative_fraction",
+		"adminstrative",
+		"admininstrative",
+		"adm",
+		"civil",
+		"region",
+		"area",
+		"local_authority",
+		"public",
+		"civil_parish",
+		"city",
+		"civic",
+		"quarter",
 	}
-	if rel.Id == 1804307 {
-		// Louisville has a lot of inner relations and I have hard time to
-		// collect the rings at this point.
-		return true
-	}
-	return isCollection(rel) ||
-		isMultilineString(rel) ||
-		getTag(rel, "admin_level") == "" ||
+	_REJECTED_BOUNDARIES = []string{
+		// REJECTED
+		// Parks
+		"national_park",
+		"park",
+		"state_park",
+		"protected_area",
 		// Ignore things like Province apostolique de Normandie (2713391)
-		getTag(rel, "boundary") == "religious_administration"
+		"religious_administration",
+		"religioius_administration",
+		"religious_adminsitration",
+		"religious",
+		"religous_administration",
+		// Statistical/polling divisions
+		"statistical",
+		"census",
+		// Historical
+		"historical_administrative",
+		"old_administrative",
+		"obsolete_administrative",
+		"historic:administrative",
+		"historic",
+		"historical",
+		// Disputed
+		"disputed",
+		"claim",
+		"aboriginal_lands",
+		// Unknown/Irrelevant
+		"rescue_unit",
+		"inherited",
+		"local",
+		"police",
+		"a",
+		"judical",
+		"school",
+		"college",
+		"water",
+		"kimmirut",
+	}
+	_BOUNDARIES = map[string]bool{}
+)
+
+func init() {
+	for _, key := range _ACCEPTED_BOUNDARIES {
+		_BOUNDARIES[key] = true
+	}
+	for _, key := range _REJECTED_BOUNDARIES {
+		_BOUNDARIES[key] = false
+	}
+}
+
+func ignoreRelation(rel *Relation) (bool, error) {
+	if rel.Id == 11980 {
+		return false, nil
+	}
+	if rel.Id == 1401905 {
+		// Tuamotu-Gambier(1401905)[level=7]
+		// Crashes indexlocations somewhere in a geos finalizer
+		return true, nil
+	}
+	if isCollection(rel) ||
+		isMultilineString(rel) ||
+		getTag(rel, "admin_level") == "" {
+		return true, nil
+	}
+	boundary := strings.ToLower(getTag(rel, "boundary"))
+	if len(boundary) > 0 {
+		accepted, found := _BOUNDARIES[boundary]
+		if !found {
+			return true, fmt.Errorf("unknown boundary value for %s: %s",
+				rel.String(), boundary)
+		}
+		if !accepted {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func buildLocation(rel *Relation, db *WaysDb) (*Location, error) {
-	if ignoreRelation(rel) {
-		return nil, nil
+	if ok, err := ignoreRelation(rel); ok || err != nil {
+		return nil, err
 	}
 	polygons, err := buildSpecialRelations(rel, db)
 	if err != nil {
