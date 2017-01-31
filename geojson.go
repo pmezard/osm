@@ -256,7 +256,11 @@ func (rt *RelationTags) Name() string {
 }
 
 func (rt *RelationTags) CountryIso2() string {
-	return rt.tags["ISO3166-1"]
+	iso2 := rt.tags["ISO3166-1"]
+	if iso2 != "" {
+		return iso2
+	}
+	return rt.tags["ISO3166-1:alpha2"]
 }
 
 func (rt *RelationTags) CountryIso3() string {
