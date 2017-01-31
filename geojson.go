@@ -263,6 +263,10 @@ func (rt *RelationTags) CountryIso3() string {
 	return rt.tags["ISO3166-1:alpha3"]
 }
 
+func (rt *RelationTags) Tag(key string) string {
+	return rt.tags[key]
+}
+
 func (rt *RelationTags) AdminLevel() (int, string) {
 	v, ok := rt.tags["admin_level"]
 	if !ok {
@@ -424,10 +428,6 @@ func getTag(rel *Relation, key string) string {
 
 func isMultilineString(rel *Relation) bool {
 	return getTag(rel, "type") == "multilinestring"
-}
-
-func isCollection(rel *Relation) bool {
-	return getTag(rel, "type") == "collection"
 }
 
 func patchRings(rel *Relation, rings []*Linestring) []*Linestring {
@@ -598,6 +598,10 @@ func init() {
 }
 
 func ignoreRelation(rel *Relation) (bool, error) {
+	rt, err := NewRelationTags(rel.Tags)
+	if err != nil {
+		return true, err
+	}
 	if rel.Id == 11980 {
 		return false, nil
 	}
@@ -625,13 +629,18 @@ func ignoreRelation(rel *Relation) (bool, error) {
 		// one without water areas (36990)
 		return true, nil
 	}
-	if isCollection(rel) ||
-		isMultilineString(rel) ||
-		getTag(rel, "admin_level") == "" ||
-		rel.Name() == "" {
+	typ := rt.Tag("type")
+	if typ == "collection" || typ == "multilinestring" {
 		return true, nil
 	}
-	boundary := strings.ToLower(getTag(rel, "boundary"))
+	level, _ := rt.AdminLevel()
+	if level < 0 {
+		return true, nil
+	}
+	if rt.Name() == "" {
+		return true, nil
+	}
+	boundary := strings.ToLower(rt.Tag("boundary"))
 	if len(boundary) > 0 {
 		accepted, found := _BOUNDARIES[boundary]
 		if !found {
