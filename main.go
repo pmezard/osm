@@ -227,6 +227,12 @@ func geojsonFn() error {
 			}
 			stop = true
 		}
+		if ok, err := ignoreRelation(rel); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		js, err := buildRelation(rel, db)
 		if err != nil {
 			fmt.Printf("ERROR: %s(%d): %s\n", rel.Name(), rel.Id, err)

@@ -716,7 +716,7 @@ func ignoreRelation(rel *Relation) (bool, error) {
 		return true, nil
 	}
 	level, _ := rt.AdminLevel()
-	if level < 0 {
+	if level < 1 || level > 8 {
 		return true, nil
 	}
 	if rt.Name() == "" {
