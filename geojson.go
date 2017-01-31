@@ -611,10 +611,35 @@ func copyTags(tags []StringPair) []StringPair {
 func patchTags(rel *Relation) []StringPair {
 	tags := rel.Tags
 	if rel.Id == 936128 {
+		// Poland
 		tags = copyTags(tags)
 		tags = append(tags,
 			StringPair{"ISO3166-1:alpha2", "PL"},
 			StringPair{"ISO3166-1:alpha3", "POL"})
+	} else if rel.Id == 937244 {
+		// Belgium
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha2", "BE"},
+			StringPair{"ISO3166-1:alpha3", "BEL"})
+	} else if rel.Id == 1711283 {
+		// Jersey
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha2", "JE"},
+			StringPair{"ISO3166-1:alpha3", "JEY"})
+	} else if rel.Id == 6571872 {
+		// Guernsey
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha2", "GG"},
+			StringPair{"ISO3166-1:alpha3", "GBG"})
+	} else if rel.Id == 2850940 || rel.Id == 4263589 {
+		// Philippines
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha2", "PH"},
+			StringPair{"ISO3166-1:alpha3", "PHL"})
 	}
 	return tags
 }
@@ -659,6 +684,31 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if rel.Id == 49715 {
 		// Poland, ignore the complicated one with regions and water areas and
 		// keep the simpler one with land areas (936128)
+		return true, nil
+	}
+	if rel.Id == 52411 {
+		// Belgium, keep the land mass (937244)
+		// TODO: keep the other, the tags are more interesting
+		return true, nil
+	}
+	if rel.Id == 1711283 {
+		// Ignore Jersey land area
+		return true, nil
+	}
+	if rel.Id == 270009 {
+		// Keep Guernsey land mass (6571872)
+		return true, nil
+	}
+	if rel.Id == 2850940 || rel.Id == 4263589 {
+		// Ignore Philippines maritime boundary and continental shell. Keep 443174.
+		return true, nil
+	}
+	if rel.Id == 5441968 {
+		// Sahrawi Arab Democratic Republic, disputed, no iso code, ignore it
+		return true, nil
+	}
+	if rel.Id == 3263728 {
+		// British Sovereign Base Areas, disputed, ignore them
 		return true, nil
 	}
 	typ := rt.Tag("type")
