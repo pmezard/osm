@@ -645,7 +645,7 @@ func checkFn() error {
 			}
 			continue
 		}
-		rt, err := NewRelationTags(rel.Tags)
+		rt, err := NewRelationTags(rel)
 		if err != nil {
 			fmt.Printf("error: %s: invalid tags: %s\n", rel.String(), err)
 			continue

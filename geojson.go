@@ -231,7 +231,8 @@ type RelationTags struct {
 	tags map[string]string
 }
 
-func NewRelationTags(tags []StringPair) (*RelationTags, error) {
+func NewRelationTags(rel *Relation) (*RelationTags, error) {
+	tags := patchTags(rel)
 	dict := map[string]string{}
 	for _, tag := range tags {
 		if _, ok := dict[tag.Key]; ok {
@@ -299,7 +300,7 @@ func makeJsonRelation(rel *Relation, center *Centroid, loc *Location) (
 	r.Center.Lon = center.Lon
 	r.Center.Lat = center.Lat
 
-	tags, err := NewRelationTags(rel.Tags)
+	tags, err := NewRelationTags(rel)
 	if err != nil {
 		return nil, err
 	}
@@ -601,8 +602,25 @@ func init() {
 	}
 }
 
+func copyTags(tags []StringPair) []StringPair {
+	other := make([]StringPair, len(tags))
+	copy(other, tags)
+	return other
+}
+
+func patchTags(rel *Relation) []StringPair {
+	tags := rel.Tags
+	if rel.Id == 936128 {
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha2", "PL"},
+			StringPair{"ISO3166-1:alpha3", "POL"})
+	}
+	return tags
+}
+
 func ignoreRelation(rel *Relation) (bool, error) {
-	rt, err := NewRelationTags(rel.Tags)
+	rt, err := NewRelationTags(rel)
 	if err != nil {
 		return true, err
 	}
@@ -612,6 +630,11 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if rel.Id == 1401905 {
 		// Tuamotu-Gambier(1401905)[level=7]
 		// Crashes indexlocations somewhere in a geos finalizer
+		return true, nil
+	}
+	if rel.Id == 6644051 {
+		// Municipio in Nicargua, nvalid admin_level, should be 6. Ignore it
+		// for now.
 		return true, nil
 	}
 	if rel.Id == 62781 || rel.Id == 51477 {
@@ -631,6 +654,11 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if rel.Id == 1124039 {
 		// Monaco has 2 representations, with and without water areas. Keep the
 		// one without water areas (36990)
+		return true, nil
+	}
+	if rel.Id == 49715 {
+		// Poland, ignore the complicated one with regions and water areas and
+		// keep the simpler one with land areas (936128)
 		return true, nil
 	}
 	typ := rt.Tag("type")
