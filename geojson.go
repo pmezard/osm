@@ -227,14 +227,25 @@ type RelationJson struct {
 	Tags     []StringPair `json:"tags"`
 }
 
-func getRelationName(rel *Relation) string {
-	name := ""
-	for _, tag := range rel.Tags {
-		if tag.Key == "name" {
-			name = tag.Value
-			break
+type RelationTags struct {
+	tags map[string]string
+}
+
+func NewRelationTags(tags []StringPair) (*RelationTags, error) {
+	dict := map[string]string{}
+	for _, tag := range tags {
+		if _, ok := dict[tag.Key]; ok {
+			return nil, fmt.Errorf("duplicate tag: %s=%s", tag.Key, tag.Value)
 		}
+		dict[tag.Key] = tag.Value
 	}
+	return &RelationTags{
+		tags: dict,
+	}, nil
+}
+
+func (rt *RelationTags) Name() string {
+	name := rt.tags["name"]
 	pos := strings.Index(name, "(")
 	if pos >= 0 {
 		// "France (terres)"
@@ -242,6 +253,26 @@ func getRelationName(rel *Relation) string {
 	}
 	name = strings.TrimSpace(name)
 	return name
+}
+
+func (rt *RelationTags) CountryIso2() string {
+	return rt.tags["ISO3166-1"]
+}
+
+func (rt *RelationTags) CountryIso3() string {
+	return rt.tags["ISO3166-1:alpha3"]
+}
+
+func (rt *RelationTags) AdminLevel() (int, string) {
+	v, ok := rt.tags["admin_level"]
+	if !ok {
+		return -1, v
+	}
+	level, err := strconv.ParseUint(v, 10, 32)
+	if err != nil {
+		return -1, v
+	}
+	return int(level), v
 }
 
 func makeJsonRelation(rel *Relation, center *Centroid, loc *Location) (
@@ -259,27 +290,20 @@ func makeJsonRelation(rel *Relation, center *Centroid, loc *Location) (
 	}
 	r.Center.Lon = center.Lon
 	r.Center.Lat = center.Lat
-	for _, tag := range rel.Tags {
-		if tag.Key == "admin_level" {
-			level, err := strconv.ParseUint(tag.Value, 10, 32)
-			if err != nil {
-				return nil, fmt.Errorf("cannot parse admin_level: %s", tag.Value)
-			}
-			if r.AdminLevel != 0 {
-				return nil, fmt.Errorf("more than one admin level")
-			}
-			if level < 1 || level > 11 {
-				return nil, fmt.Errorf("unexpected admin_level: %d", level)
-			}
-			r.AdminLevel = int(level)
-		} else if tag.Key == "ISO3166-1" {
-			r.CountryIso2 = tag.Value
-		} else if tag.Key == "ISO3166-1:alpha3" {
-			r.CountryIso3 = tag.Value
-		}
-		r.Tags = append(r.Tags, tag)
+
+	tags, err := NewRelationTags(rel.Tags)
+	if err != nil {
+		return nil, err
 	}
-	r.Name = getRelationName(rel)
+	r.Name = tags.Name()
+	level, levelStr := tags.AdminLevel()
+	if level < 1 || level > 11 {
+		return nil, fmt.Errorf("unexpected admin_level: %s", levelStr)
+	}
+	r.AdminLevel = level
+	r.CountryIso2 = tags.CountryIso2()
+	r.CountryIso3 = tags.CountryIso3()
+	r.Tags = append(r.Tags, rel.Tags...)
 	return r, nil
 }
 
@@ -580,6 +604,25 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if rel.Id == 1401905 {
 		// Tuamotu-Gambier(1401905)[level=7]
 		// Crashes indexlocations somewhere in a geos finalizer
+		return true, nil
+	}
+	if rel.Id == 62781 || rel.Id == 51477 {
+		// Germany has 3 relations of admin_level=2
+		// 51477: outer ways without linestrings
+		// 62781: landmass only (no water area)
+		// 111111: outer ways with linestring
+		// Let's keep the last one for no special reason but we have to pick
+		// one.
+		return true, nil
+	}
+	if rel.Id == 2202162 {
+		// France has 2 representation, with and without water areas. Let's
+		// keep the second one (11980).
+		return true, nil
+	}
+	if rel.Id == 1124039 {
+		// Monaco has 2 representations, with and without water areas. Keep the
+		// one without water areas (36990)
 		return true, nil
 	}
 	if isCollection(rel) ||

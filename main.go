@@ -624,6 +624,56 @@ func recursiveRelFn() error {
 }
 
 var (
+	checkCmd = app.Command("check", "check various properties of relations")
+	checkO5m = checkCmd.Arg("o5mPath", "o5m file path").Required().String()
+)
+
+func checkFn() error {
+	r, err := NewO5MReader(*checkO5m, NodeKind, WayKind)
+	if err != nil {
+		return err
+	}
+	iso2Codes := map[string]string{}
+	for r.Next() {
+		if r.Kind() != RelationKind {
+			continue
+		}
+		rel := r.Relation()
+		if ok, err := ignoreRelation(rel); ok || err != nil {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		rt, err := NewRelationTags(rel.Tags)
+		if err != nil {
+			fmt.Printf("error: %s: invalid tags: %s\n", rel.String(), err)
+			continue
+		}
+		level, levelStr := rt.AdminLevel()
+		if level < 1 {
+			fmt.Printf("error: %s: invalid admin level: %s\n", rel.String(), levelStr)
+			continue
+		}
+		if level != 2 {
+			continue
+		}
+		iso2 := rt.CountryIso2()
+		if iso2 == "" {
+			fmt.Printf("error: %s: missing iso2 code\n", rel.String())
+			continue
+		}
+		if other, ok := iso2Codes[iso2]; ok {
+			fmt.Printf("error: %s: duplicate iso2 code: %s\n", rel.String(), other)
+			continue
+		}
+		iso2Codes[iso2] = rel.String()
+		//fmt.Println(rt.Name(), rt.CountryIso2(), rt.CountryIso3())
+	}
+	return r.Err()
+}
+
+var (
 	resetDbCmd    = app.Command("resetdb", "delete a bucket from feature db")
 	resetDbPath   = resetDbCmd.Arg("dbPath", "db path").Required().String()
 	resetDbBucket = resetDbCmd.Arg("bucket", "name of bucket to delete").Required().String()
@@ -662,6 +712,8 @@ func dispatch() error {
 		return recursiveRelFn()
 	case resetDbCmd.FullCommand():
 		return resetDbFn()
+	case checkCmd.FullCommand():
+		return checkFn()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
