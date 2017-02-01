@@ -640,7 +640,13 @@ func patchTags(rel *Relation) []StringPair {
 		tags = append(tags,
 			StringPair{"ISO3166-1:alpha2", "PH"},
 			StringPair{"ISO3166-1:alpha3", "PHL"})
+	} else if rel.Id == 36990 {
+		// Monaco
+		tags = copyTags(tags)
+		tags = append(tags,
+			StringPair{"ISO3166-1:alpha3", "MCO"})
 	}
+
 	return tags
 }
 

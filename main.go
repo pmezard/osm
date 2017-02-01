@@ -640,6 +640,7 @@ func checkFn() error {
 		return err
 	}
 	iso2Codes := map[string]string{}
+	iso3Codes := map[string]string{}
 	for r.Next() {
 		if r.Kind() != RelationKind {
 			continue
@@ -674,6 +675,17 @@ func checkFn() error {
 			continue
 		}
 		iso2Codes[iso2] = rel.String()
+
+		iso3 := rt.CountryIso3()
+		if iso3 == "" {
+			fmt.Printf("error: %s: missing iso3 code\n", rel.String())
+			continue
+		}
+		if other, ok := iso3Codes[iso3]; ok {
+			fmt.Printf("error: %s: duplicate iso3 code: %s\n", rel.String(), other)
+			continue
+		}
+		iso3Codes[iso3] = rel.String()
 		//fmt.Println(rt.Name(), rt.CountryIso2(), rt.CountryIso3())
 	}
 	return r.Err()
