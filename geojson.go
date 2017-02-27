@@ -295,6 +295,10 @@ func (rt *RelationTags) AdminLevel() (int, string) {
 	return int(level), v
 }
 
+func (rt *RelationTags) PlaceType() string {
+	return rt.tags["place"]
+}
+
 func makeJsonRelation(rel *Relation, center *Centroid, loc *Location) (
 	*RelationJson, error) {
 
@@ -562,6 +566,10 @@ var (
 		"city",
 		"civic",
 		"quarter",
+		// This one is debatable and appears along with place=town. Ex: Chatham (445115).
+		"place",
+		// Comes with place=town. Ex: Melgaço (5756321).
+		"urban",
 	}
 	_REJECTED_BOUNDARIES = []string{
 		// REJECTED
@@ -722,7 +730,10 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	}
 	level, _ := rt.AdminLevel()
 	if level < 1 || level > 8 {
-		return true, nil
+		placeType := rt.PlaceType()
+		if placeType != "city" && placeType != "town" {
+			return true, nil
+		}
 	}
 	if rt.Name() == "" {
 		return true, nil
