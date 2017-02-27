@@ -655,20 +655,20 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	if rel.Id == 11980 {
-		return false, nil
-	}
-	if rel.Id == 1401905 {
+	switch rel.Id {
+	case 2202162, 11980:
+		// France has 2 representation, with and without water areas. Let's
+		// keep the second one (11980).
+		return rel.Id != 11980, nil
+	case 1401905:
 		// Tuamotu-Gambier(1401905)[level=7]
 		// Crashes indexlocations somewhere in a geos finalizer
 		return true, nil
-	}
-	if rel.Id == 6644051 {
-		// Municipio in Nicargua, nvalid admin_level, should be 6. Ignore it
+	case 6644051:
+		// Municipio in Nicargua, invalid admin_level, should be 6. Ignore it
 		// for now.
 		return true, nil
-	}
-	if rel.Id == 62781 || rel.Id == 51477 {
+	case 62781, 51477:
 		// Germany has 3 relations of admin_level=2
 		// 51477: outer ways without linestrings
 		// 62781: landmass only (no water area)
@@ -676,44 +676,31 @@ func ignoreRelation(rel *Relation) (bool, error) {
 		// Let's keep the last one for no special reason but we have to pick
 		// one.
 		return true, nil
-	}
-	if rel.Id == 2202162 {
-		// France has 2 representation, with and without water areas. Let's
-		// keep the second one (11980).
-		return true, nil
-	}
-	if rel.Id == 1124039 {
+	case 1124039:
 		// Monaco has 2 representations, with and without water areas. Keep the
 		// one without water areas (36990)
 		return true, nil
-	}
-	if rel.Id == 49715 {
+	case 49715:
 		// Poland, ignore the complicated one with regions and water areas and
 		// keep the simpler one with land areas (936128)
 		return true, nil
-	}
-	if rel.Id == 52411 {
+	case 52411:
 		// Belgium, keep the land mass (937244)
 		// TODO: keep the other, the tags are more interesting
 		return true, nil
-	}
-	if rel.Id == 1711283 {
+	case 1711283:
 		// Ignore Jersey land area
 		return true, nil
-	}
-	if rel.Id == 270009 {
+	case 270009:
 		// Keep Guernsey land mass (6571872)
 		return true, nil
-	}
-	if rel.Id == 2850940 || rel.Id == 4263589 {
+	case 2850940, 4263589:
 		// Ignore Philippines maritime boundary and continental shell. Keep 443174.
 		return true, nil
-	}
-	if rel.Id == 5441968 {
+	case 5441968:
 		// Sahrawi Arab Democratic Republic, disputed, no iso code, ignore it
 		return true, nil
-	}
-	if rel.Id == 3263728 {
+	case 3263728:
 		// British Sovereign Base Areas, disputed, ignore them
 		return true, nil
 	}
