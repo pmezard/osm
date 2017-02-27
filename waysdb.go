@@ -11,7 +11,6 @@ var (
 	waysBucket      = []byte("ways")
 	relationsBucket = []byte("relations")
 	locationsBucket = []byte("locations")
-	nodesBucket     = []byte("nodes")
 	centroidsBucket = []byte("centroids")
 )
 
@@ -34,7 +33,6 @@ func OpenWaysDb(path string) (*WaysDb, error) {
 			waysBucket,
 			relationsBucket,
 			locationsBucket,
-			nodesBucket,
 			centroidsBucket,
 		}
 		for _, name := range names {
@@ -141,19 +139,6 @@ func (db *WaysDb) HasLocation(id int64) (bool, error) {
 		return nil
 	})
 	return ok, err
-}
-
-func (db *WaysDb) PutNode(id int64, doc *Node) error {
-	return db.putJson(nodesBucket, id, doc)
-}
-
-func (db *WaysDb) GetNode(id int64) (*Node, error) {
-	doc := &Node{}
-	ok, err := db.getJson(nodesBucket, id, doc)
-	if !ok {
-		doc = nil
-	}
-	return doc, err
 }
 
 func (db *WaysDb) PutCentroid(id int64, doc *Centroid) error {
