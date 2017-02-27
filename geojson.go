@@ -394,7 +394,8 @@ func collectWayGeometries(wayIds []Ref, db *WaysDb) ([]*Linestring, error) {
 		if ring == nil {
 			return nil, fmt.Errorf("cannot resolve way: %d", ref.Id)
 		}
-		ring.Role = ref.Role
+		// People insist on typing "Outer" instead of "outer".
+		ring.Role = strings.ToLower(ref.Role)
 		rings = append(rings, ring)
 	}
 	return rings, nil
