@@ -92,12 +92,23 @@ func buildNodeArray(r *O5MReader) (NodePoints, error) {
 	return NodePoints(points), r.Seek(resets[1])
 }
 
+var (
+	IgnoredRingRoles = map[string]bool{
+		// Apparently usde to delimit the city hall as an area or enclosing
+		// linear, ignore it. Ex: Pinos Genil(346486)[level=8].
+		"admin_centre": true,
+	}
+)
+
 func buildGeometry(rings []*Linestring) ([]*geos.Geometry, error) {
 	// Bail out on non-ring inputs
 	for _, ring := range rings {
 		if ring.Role == "inner" || ring.Role == "outer" || ring.Role == "" {
 			continue
 		} else {
+			if _, ok := IgnoredRingRoles[ring.Role]; ok {
+				continue
+			}
 			return nil, fmt.Errorf("unsupported ring role: %s", ring.Role)
 		}
 	}
