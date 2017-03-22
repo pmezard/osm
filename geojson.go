@@ -582,12 +582,14 @@ var (
 		"park",
 		"state_park",
 		"protected_area",
+		"forestry",
 		// Ignore things like Province apostolique de Normandie (2713391)
 		"religious_administration",
 		"religioius_administration",
 		"religious_adminsitration",
 		"religious",
 		"religous_administration",
+		"rreligious_administration",
 		// Statistical/polling divisions
 		"statistical",
 		"census",
@@ -664,11 +666,6 @@ func patchTags(rel *Relation) []StringPair {
 		tags = append(tags,
 			StringPair{"ISO3166-1:alpha2", "PH"},
 			StringPair{"ISO3166-1:alpha3", "PHL"})
-	} else if rel.Id == 36990 {
-		// Monaco
-		tags = copyTags(tags)
-		tags = append(tags,
-			StringPair{"ISO3166-1:alpha3", "MCO"})
 	}
 
 	return tags
@@ -687,10 +684,6 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	case 1401905:
 		// Tuamotu-Gambier(1401905)[level=7]
 		// Crashes indexlocations somewhere in a geos finalizer
-		return true, nil
-	case 6644051:
-		// Municipio in Nicargua, invalid admin_level, should be 6. Ignore it
-		// for now.
 		return true, nil
 	case 62781, 51477:
 		// Germany has 3 relations of admin_level=2
@@ -726,6 +719,9 @@ func ignoreRelation(rel *Relation) (bool, error) {
 		return true, nil
 	case 3263728:
 		// British Sovereign Base Areas, disputed, ignore them
+		return true, nil
+	case 6858045:
+		// Liberland, because it does not really exist
 		return true, nil
 	}
 	typ := rt.Tag("type")
