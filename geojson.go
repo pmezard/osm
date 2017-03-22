@@ -636,13 +636,7 @@ func copyTags(tags []StringPair) []StringPair {
 
 func patchTags(rel *Relation) []StringPair {
 	tags := rel.Tags
-	if rel.Id == 936128 {
-		// Poland
-		tags = copyTags(tags)
-		tags = append(tags,
-			StringPair{"ISO3166-1:alpha2", "PL"},
-			StringPair{"ISO3166-1:alpha3", "POL"})
-	} else if rel.Id == 937244 {
+	if rel.Id == 937244 {
 		// Belgium
 		tags = copyTags(tags)
 		tags = append(tags,
@@ -697,9 +691,9 @@ func ignoreRelation(rel *Relation) (bool, error) {
 		// Monaco has 2 representations, with and without water areas. Keep the
 		// one without water areas (36990)
 		return true, nil
-	case 49715:
-		// Poland, ignore the complicated one with regions and water areas and
-		// keep the simpler one with land areas (936128)
+	case 936128:
+		// Poland, we used to keep 936128 because it had only land areas but
+		// 49715 has more attributes and seems to be more maintained.
 		return true, nil
 	case 52411:
 		// Belgium, keep the land mass (937244)
