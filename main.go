@@ -76,12 +76,9 @@ func locationsFn() error {
 	}
 	defer db.Close()
 
-	relId := int64(-1)
-	if *locationsId != "" {
-		relId, err = strconv.ParseInt(*locationsId, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid relation identifier: %s", err)
-		}
+	relId, err := parseRelId(*locationsId)
+	if err != nil {
+		return err
 	}
 	type Request struct {
 		Relation *Relation
@@ -176,6 +173,17 @@ func locationsFn() error {
 	return nil
 }
 
+func parseRelId(s string) (int64, error) {
+	if s == "" {
+		return -1, nil
+	}
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return -1, err
+	}
+	return id, nil
+}
+
 var (
 	geojsonCmd     = app.Command("geojson", "convert o5m to geojson")
 	geojsonPath    = geojsonCmd.Arg("path", "o5m file path").Required().String()
@@ -190,13 +198,9 @@ func geojsonFn() error {
 		Type   string        `json:"_type"`
 		Source *RelationJson `json:"_source"`
 	}
-	relId := int64(-1)
-	if *geojsonId != "" {
-		id, err := strconv.ParseUint(*geojsonId, 10, 64)
-		if err != nil {
-			return err
-		}
-		relId = int64(id)
+	relId, err := parseRelId(*geojsonId)
+	if err != nil {
+		return err
 	}
 
 	start := time.Now()
@@ -400,6 +404,7 @@ var (
 			Required().String()
 	indexCentersDb = indexCentersCmd.Arg("db", "locations db path").
 			Required().String()
+	indexCentersId = indexCentersCmd.Flag("id", "relation id").String()
 )
 
 func indexCentersFn() error {
@@ -414,13 +419,24 @@ func indexCentersFn() error {
 	if err != nil {
 		return err
 	}
+	relId, err := parseRelId(*indexCentersId)
+	if err != nil {
+		return err
+	}
+	stop := false
 	polygons := 0
 	indexed := 0
-	for r.Next() {
+	for r.Next() && !stop {
 		if r.Kind() != RelationKind {
 			continue
 		}
 		rel := r.Relation()
+		if relId >= 0 {
+			if relId != rel.Id {
+				continue
+			}
+			stop = true
+		}
 		if ok, err := ignoreRelation(rel); ok || err != nil {
 			if err != nil {
 				return err
