@@ -761,13 +761,14 @@ func buildLocation(rel *Relation, db *WaysDb) (*Location, error) {
 		}
 	}
 	loc, err := polygonsToJson(polygons)
-	if loc != nil {
-		err = db.PutLocation(rel.Id, loc)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
-	return loc, nil
+	if loc == nil {
+		return nil, nil
+	}
+	err = db.PutLocation(rel.Id, loc)
+	return loc, err
 }
 
 func buildRelation(rel *Relation, db *WaysDb) (
