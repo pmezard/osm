@@ -557,7 +557,6 @@ var (
 		"neighbourhood",
 		"political",
 		"maritime",
-		"administrative_fraction",
 		"adminstrative",
 		"admininstrative",
 		"adm",
@@ -577,6 +576,9 @@ var (
 	}
 	_REJECTED_BOUNDARIES = []string{
 		// REJECTED
+		// Ignore French speaking part of Wallonie, subdivisions of Catalonia
+		// comarques which are split on provinces, and disputed areas in Cyprus.
+		"administrative_fraction",
 		// Parks
 		"national_park",
 		"park",
