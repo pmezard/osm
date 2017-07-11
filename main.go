@@ -494,7 +494,7 @@ func indexCentersFn() error {
 		return err
 	}
 	seenNode := false
-	for r.Next() {
+	for r.Next() && len(nodeIds) > 0 {
 		if r.Kind() != NodeKind {
 			if seenNode && r.Kind() == ResetKind {
 				break
@@ -516,6 +516,7 @@ func indexCentersFn() error {
 			}
 			indexed++
 		}
+		delete(nodeIds, n.Id)
 	}
 	fmt.Printf("indexed: %d/%d\n", indexed, polygons)
 	return nil
