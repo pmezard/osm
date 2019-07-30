@@ -575,6 +575,8 @@ var (
 		"place",
 		// Comes with place=town. Ex: Melgaço (5756321).
 		"urban",
+		// West Yorkshire(88079)[level=6]
+		"ceremonial",
 	}
 	_REJECTED_BOUNDARIES = []string{
 		// REJECTED
