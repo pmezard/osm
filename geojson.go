@@ -549,6 +549,7 @@ var (
 		"administative",
 		"admniistrative",
 		"adminsitrative",
+		"administrative;wenfeng",
 		"land_area",
 		"landuse",
 		"cdp",
@@ -577,6 +578,8 @@ var (
 		"urban",
 		// West Yorkshire(88079)[level=6]
 		"ceremonial",
+		"municipality",
+		"union_council",
 	}
 	_REJECTED_BOUNDARIES = []string{
 		// REJECTED
@@ -607,10 +610,13 @@ var (
 		"historic:administrative",
 		"historic",
 		"historical",
+		"traditional",
 		// Disputed
+		"conflict",
 		"disputed",
 		"claim",
 		"aboriginal_lands",
+		"aboriginal lands",
 		// Unknown/Irrelevant
 		"rescue_unit",
 		"inherited",
@@ -621,8 +627,11 @@ var (
 		"school",
 		"college",
 		"water",
+		"refugee_camp",
 		"kimmirut",
 		"el mdina",
+		"ezzouhour",
+		"bir ali ben khalifa",
 	}
 	_BOUNDARIES = map[string]bool{}
 )
