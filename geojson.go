@@ -622,6 +622,7 @@ var (
 		"college",
 		"water",
 		"kimmirut",
+		"el mdina",
 	}
 	_BOUNDARIES = map[string]bool{}
 )
