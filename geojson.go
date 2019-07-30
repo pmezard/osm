@@ -744,7 +744,7 @@ func ignoreRelation(rel *Relation) (bool, error) {
 	if len(boundary) > 0 {
 		accepted, found := _BOUNDARIES[boundary]
 		if !found {
-			return true, fmt.Errorf("unknown boundary value for %s: %s",
+			return true, fmt.Errorf("unknown boundary value for %s: '%s'",
 				rel.String(), boundary)
 		}
 		if !accepted {

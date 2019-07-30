@@ -665,7 +665,7 @@ func checkFn() error {
 		rel := r.Relation()
 		if ok, err := ignoreRelation(rel); ok || err != nil {
 			if err != nil {
-				return err
+				fmt.Printf("error: %s: %s\n", rel.String(), err)
 			}
 			continue
 		}
