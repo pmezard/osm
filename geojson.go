@@ -505,7 +505,7 @@ func buildSpecialRelations(rel *Relation, db *WaysDb) ([]*geos.Geometry, error) 
 		parts, err := buildRelationPolygons(sub, db)
 		if err != nil {
 			return nil, fmt.Errorf("cannot build subrelation %s(%d): %s",
-				sub.Name, sub.Id, err)
+				sub.Name(), sub.Id, err)
 		}
 		geoms = append(geoms, parts...)
 	}
