@@ -356,6 +356,8 @@ var (
 		"subarea:FIXME":   true,
 		"collection":      true, // deprecated
 		"disused:subarea": true,
+		"admin_centre":    true, // Node representing the administrative centre
+		"label":           true, // Node representing where to draw the label
 	}
 )
 
