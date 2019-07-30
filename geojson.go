@@ -603,6 +603,7 @@ var (
 		"historical_administrative",
 		"old_administrative",
 		"obsolete_administrative",
+		"obsolete_boundary",
 		"historic:administrative",
 		"historic",
 		"historical",
